@@ -141,21 +141,22 @@ def _compute_stop_line(
     """Compute stop line from center of road to right edge.
     
     Right side is perpendicular to traffic direction:
-    - North (dy=-1): right is East (x+)
-    - East (dx=1): right is South (y+)
-    - South (dy=1): right is West (x-)
-    - West (dx=-1): right is North (y-)
+    - North (dy=-1): right is West (x-)
+    - East (dx=1): right is North (y-)
+    - South (dy=1): right is East (x+)
+    - West (dx=-1): right is South (y+)
     """
     cx, cy = center_point
     half_width = road_width // 2
 
     if dy != 0:
-        right_offset = (half_width, 0)
+        # Vertical traffic (N/S): right is perpendicular on x-axis
+        center_point_line = (cx, cy)
+        right_point = (cx - half_width, cy) if dy < 0 else (cx + half_width, cy)
     else:
-        right_offset = (0, half_width)
+        # Horizontal traffic (E/W): right is perpendicular on y-axis
+        center_point_line = (cx, cy)
+        right_point = (cx, cy - half_width) if dx > 0 else (cx, cy + half_width)
 
-    left_point = (cx - right_offset[0], cy - right_offset[1])
-    right_point = (cx + right_offset[0], cy + right_offset[1])
-
-    return (left_point, right_point)
+    return (center_point_line, right_point)
 
