@@ -1,4 +1,4 @@
-from crossroads.config import ARM_COUNT, ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
+from crossroads.config import ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
 from crossroads.intersection import build_intersection_geometry
 
 
@@ -6,7 +6,7 @@ def test_build_intersection_geometry_has_four_cardinal_arms():
     geometry = build_intersection_geometry(
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
-        arm_count=ARM_COUNT,
+        arm_count=4,
         road_width=ROAD_WIDTH,
         stop_line_distance=STOP_LINE_DISTANCE,
     )
@@ -24,7 +24,7 @@ def test_build_intersection_geometry_has_cardinal_arm_positions():
     geometry = build_intersection_geometry(
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
-        arm_count=ARM_COUNT,
+        arm_count=4,
         road_width=ROAD_WIDTH,
         stop_line_distance=STOP_LINE_DISTANCE,
     )
@@ -37,31 +37,11 @@ def test_build_intersection_geometry_has_cardinal_arm_positions():
     ]
 
 
-def test_build_intersection_geometry_is_data_driven_for_arm_count():
+def test_build_intersection_geometry_has_center_lines_four_way():
     geometry = build_intersection_geometry(
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
-        arm_count=6,
-        road_width=ROAD_WIDTH,
-        stop_line_distance=STOP_LINE_DISTANCE,
-    )
-
-    assert len(geometry.arms) == 6
-    assert [arm.name for arm in geometry.arms] == [
-        "ARM_1",
-        "ARM_2",
-        "ARM_3",
-        "ARM_4",
-        "ARM_5",
-        "ARM_6",
-    ]
-
-
-def test_build_intersection_geometry_has_center_lines():
-    geometry = build_intersection_geometry(
-        window_width=WINDOW_WIDTH,
-        window_height=WINDOW_HEIGHT,
-        arm_count=ARM_COUNT,
+        arm_count=4,
         road_width=ROAD_WIDTH,
         stop_line_distance=STOP_LINE_DISTANCE,
     )
@@ -69,8 +49,8 @@ def test_build_intersection_geometry_has_center_lines():
     assert len(geometry.arm_center_lines) == 4
     cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
     assert geometry.arm_center_lines[0] == (
-        (cx, cy - STOP_LINE_DISTANCE - 100),
-        (cx, cy + STOP_LINE_DISTANCE + 100),
+        (cx, 0),
+        (cx, cy - STOP_LINE_DISTANCE),
     )
 
 
@@ -78,7 +58,7 @@ def test_build_intersection_geometry_computes_road_grid_from_config():
     geometry = build_intersection_geometry(
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
-        arm_count=ARM_COUNT,
+        arm_count=4,
         road_width=ROAD_WIDTH,
         stop_line_distance=STOP_LINE_DISTANCE,
     )
@@ -88,3 +68,41 @@ def test_build_intersection_geometry_computes_road_grid_from_config():
         (0, WINDOW_HEIGHT // 2 - ROAD_WIDTH // 2, WINDOW_WIDTH, ROAD_WIDTH),
     ]
 
+
+def test_build_intersection_geometry_three_way():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=3,
+        road_width=ROAD_WIDTH,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    assert [arm.name for arm in geometry.arms] == ["N", "E", "W"]
+    assert len(geometry.arms) == 3
+    cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+    assert [arm.position for arm in geometry.arms] == [
+        (cx, 0),
+        (WINDOW_WIDTH - 1, cy),
+        (0, cy),
+    ]
+    assert len(geometry.road_rects) == 2
+
+
+def test_build_intersection_geometry_two_way():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=2,
+        road_width=ROAD_WIDTH,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    assert [arm.name for arm in geometry.arms] == ["N", "S"]
+    assert len(geometry.arms) == 2
+    cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+    assert [arm.position for arm in geometry.arms] == [
+        (cx, 0),
+        (cx, WINDOW_HEIGHT - 1),
+    ]
+    assert len(geometry.road_rects) == 1
