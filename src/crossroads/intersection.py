@@ -6,7 +6,7 @@ from typing import Callable
 class ArmGeometry:
     name: str
     position: tuple[int, int]
-    stop_line_point: tuple[int, int]
+    stop_line: tuple[tuple[int, int], tuple[int, int]]
     center_line: tuple[tuple[int, int], tuple[int, int]]
 
 
@@ -91,7 +91,7 @@ def build_intersection_geometry(
         dx, dy = arm_spec["dx"], arm_spec["dy"]
         name = topology.arm_names[index]
 
-        stop_line_point = (
+        stop_line_center = (
             cx + dx * stop_line_distance,
             cy + dy * stop_line_distance,
         )
@@ -100,13 +100,15 @@ def build_intersection_geometry(
             cx, cy, dx, dy, window_width, window_height
         )
 
-        center_line = (position, stop_line_point)
+        center_line = (position, stop_line_center)
+
+        stop_line = _compute_stop_line(stop_line_center, dx, dy, road_width)
 
         arms.append(
             ArmGeometry(
                 name=name,
                 position=position,
-                stop_line_point=stop_line_point,
+                stop_line=stop_line,
                 center_line=center_line,
             )
         )
@@ -131,4 +133,29 @@ def _compute_arm_position(
     if dx == 0:
         return (cx, 0 if dy < 0 else window_height - 1)
     return (0 if dx < 0 else window_width - 1, cy)
+
+
+def _compute_stop_line(
+    center_point: tuple[int, int], dx: int, dy: int, road_width: int
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Compute stop line from center of road to right edge.
+    
+    Right side is perpendicular to traffic direction:
+    - North (dy=-1): right is East (x+)
+    - East (dx=1): right is South (y+)
+    - South (dy=1): right is West (x-)
+    - West (dx=-1): right is North (y-)
+    """
+    cx, cy = center_point
+    half_width = road_width // 2
+
+    if dy != 0:
+        right_offset = (half_width, 0)
+    else:
+        right_offset = (0, half_width)
+
+    left_point = (cx - right_offset[0], cy - right_offset[1])
+    right_point = (cx + right_offset[0], cy + right_offset[1])
+
+    return (left_point, right_point)
 

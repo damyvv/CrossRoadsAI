@@ -18,15 +18,6 @@ CENTER_LINE_COLOR = (200, 200, 200)
 CENTER_LINE_DASH_PATTERN = [4, 4]
 
 
-def _stop_line_segment(arm: ArmGeometry, *, center: tuple[int, int], road_width: int) -> tuple[tuple[int, int], tuple[int, int]]:
-    x, y = arm.stop_line_point
-    cx, cy = center
-    half_width = road_width // 2
-    if abs(x - cx) > abs(y - cy):
-        return (x, y - half_width), (x, y + half_width)
-    return (x - half_width, y), (x + half_width, y)
-
-
 def _draw_dashed_line(surface: pygame.Surface, color: tuple[int, int, int], start: tuple[int, int], end: tuple[int, int], width: int = 1, dash_pattern: list[int] | None = None) -> None:
     if dash_pattern is None:
         dash_pattern = [4, 4]
@@ -96,7 +87,7 @@ def run(*, max_frames: int | None = None) -> None:
             pygame.draw.rect(screen, ROAD_COLOR, adjusted_rect)
 
         for arm in geometry.arms:
-            start, end = _stop_line_segment(arm, center=geometry.center, road_width=ROAD_WIDTH)
+            start, end = arm.stop_line
             adjusted_start = (center_x - WINDOW_WIDTH // 2 + start[0], center_y - WINDOW_HEIGHT // 2 + start[1])
             adjusted_end = (center_x - WINDOW_WIDTH // 2 + end[0], center_y - WINDOW_HEIGHT // 2 + end[1])
             pygame.draw.line(screen, STOP_LINE_COLOR, adjusted_start, adjusted_end, width=3)
