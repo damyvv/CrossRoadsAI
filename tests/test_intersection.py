@@ -15,10 +15,10 @@ def test_build_intersection_geometry_has_four_cardinal_arms():
     cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
     half_width = ROAD_WIDTH // 2
     assert [arm.stop_line for arm in geometry.arms] == [
-        ((cx - half_width, cy - STOP_LINE_DISTANCE), (cx + half_width, cy - STOP_LINE_DISTANCE)),
-        ((cx + STOP_LINE_DISTANCE, cy - half_width), (cx + STOP_LINE_DISTANCE, cy + half_width)),
-        ((cx - half_width, cy + STOP_LINE_DISTANCE), (cx + half_width, cy + STOP_LINE_DISTANCE)),
-        ((cx - STOP_LINE_DISTANCE, cy - half_width), (cx - STOP_LINE_DISTANCE, cy + half_width)),
+        ((cx, cy - STOP_LINE_DISTANCE), (cx - half_width, cy - STOP_LINE_DISTANCE)),
+        ((cx + STOP_LINE_DISTANCE, cy), (cx + STOP_LINE_DISTANCE, cy - half_width)),
+        ((cx, cy + STOP_LINE_DISTANCE), (cx + half_width, cy + STOP_LINE_DISTANCE)),
+        ((cx - STOP_LINE_DISTANCE, cy), (cx - STOP_LINE_DISTANCE, cy + half_width)),
     ]
 
 
