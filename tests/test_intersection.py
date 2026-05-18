@@ -31,8 +31,8 @@ def test_build_intersection_geometry_has_cardinal_arm_positions():
 
     assert [arm.position for arm in geometry.arms] == [
         (WINDOW_WIDTH // 2, 0),
-        (WINDOW_WIDTH, WINDOW_HEIGHT // 2),
-        (WINDOW_WIDTH // 2, WINDOW_HEIGHT),
+        (WINDOW_WIDTH - 1, WINDOW_HEIGHT // 2),
+        (WINDOW_WIDTH // 2, WINDOW_HEIGHT - 1),
         (0, WINDOW_HEIGHT // 2),
     ]
 
@@ -57,6 +57,23 @@ def test_build_intersection_geometry_is_data_driven_for_arm_count():
     ]
 
 
+def test_build_intersection_geometry_has_center_lines():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=ARM_COUNT,
+        road_width=ROAD_WIDTH,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    assert len(geometry.arm_center_lines) == 4
+    cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+    assert geometry.arm_center_lines[0] == (
+        (cx, cy - STOP_LINE_DISTANCE - 100),
+        (cx, cy + STOP_LINE_DISTANCE + 100),
+    )
+
+
 def test_build_intersection_geometry_computes_road_grid_from_config():
     geometry = build_intersection_geometry(
         window_width=WINDOW_WIDTH,
@@ -70,3 +87,4 @@ def test_build_intersection_geometry_computes_road_grid_from_config():
         (WINDOW_WIDTH // 2 - ROAD_WIDTH // 2, 0, ROAD_WIDTH, WINDOW_HEIGHT),
         (0, WINDOW_HEIGHT // 2 - ROAD_WIDTH // 2, WINDOW_WIDTH, ROAD_WIDTH),
     ]
+
