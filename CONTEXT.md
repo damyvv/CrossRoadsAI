@@ -9,7 +9,7 @@ The central road crossing where vehicle flows are coordinated by traffic lights.
 _Avoid_: Crossroad, junction
 
 **Arm**:
-A directional approach of an Intersection that carries one inbound and one outbound lane flow.
+A directional approach of an Intersection that carries one inbound lane group and one outbound lane group.
 _Avoid_: Approach, road branch
 
 **Phase**:
@@ -52,6 +52,26 @@ _Avoid_: Approach line, travel strip
 The longitudinal path at the center of a lane used as the canonical movement path for vehicles.
 _Avoid_: Center path, lane track
 
+**Carriageway Separation**:
+The median gap between inbound and outbound lane groups on an Arm used to keep opposite lane centerlines straight through the Intersection.
+_Avoid_: Verge spacing, median padding
+
+**Lane Movement Set**:
+The allowed movement options for a lane, represented as a non-empty subset of left, straight, and right.
+_Avoid_: Turning mode, lane intent
+
+**Signal Group**:
+The set of lanes that share one traffic-light window because their lane movements are mutually conflict-free.
+_Avoid_: Phase lane set, lane batch
+
+**Clearance Interval**:
+The all-red duration between consecutive Signal Groups used to clear conflicting movement paths.
+_Avoid_: Dead time, empty phase
+
+**Committed Movement**:
+The single movement choice assigned to a Vehicle at spawn and kept unchanged for the rest of its traversal.
+_Avoid_: Dynamic intent, opportunistic turn
+
 **Exit Boundary**:
 The opposite-direction Stop Line crossing point where a Vehicle is considered to have exited the Intersection traversal.
 _Avoid_: End line, despawn line
@@ -73,9 +93,15 @@ _Avoid_: Cleanup state, delete state
 - Each **Tick** may advance a **Phase** to the next **Light State**
 - A **Major Cycle** contains every **Phase** exactly once
 - A **Phase Handoff** occurs when the active **Phase** reaches Red
+- A **Phase Handoff** may include a **Clearance Interval** before the next **Signal Group** turns Green
 - Each **Arm** has one **Stop Line**
 - Each **Arm** has an **Inbound Lane** determined by **Driving Side**
 - Each **Inbound Lane** has one **Lane Centerline**
+- Each **Inbound Lane** has one **Lane Movement Set**
+- Each **Inbound Lane** belongs to exactly one **Signal Group** per **Phase**
+- A **Vehicle** receives one **Committed Movement** at spawn from its lane's **Lane Movement Set**
+- Each **Arm** has one **Carriageway Separation** between inbound and outbound lane groups
+- **Carriageway Separation** keeps opposing **Lane Centerline** paths collinear through an **Intersection**
 - A **Vehicle** follows the **Lane Centerline** of an **Inbound Lane** on an **Arm**
 - A **Vehicle** leaves the simulation at the **Exit Boundary**
 - A **Vehicle** can be in **Approaching**, **Crossing**, **Exited State**, or **Discard State**
@@ -93,3 +119,9 @@ _Avoid_: Cleanup state, delete state
 - "cycle" was used for both full rotation and one green window — resolved: use **Phase** for one window and **Major Cycle** for the full loop.
 - "constant green traversal" conflicted with "mandatory stop-at-stop-line" — resolved: keep **constant green traversal** for slice #4.
 - "EXITED" was conflated with "off-screen disappearance" — resolved: **Exit Boundary** is opposite-direction Stop Line crossing, while off-screen disappearance is a separate rendering/lifecycle concern.
+- "verge spacing" was used for geometric lane alignment — resolved: use **Carriageway Separation**.
+- "turning lane" and "shared lane" were overloaded — resolved: define allowed movements as **Lane Movement Set**.
+- "traffic light per lane" was interpreted as either independent or coordinated control — resolved: model lanes under coordinated **Signal Groups**.
+- "all-red time" overlapped with yellow semantics — resolved: use **Clearance Interval** for inter-group red-only time.
+- "intent" was used as both configurable options and runtime choice — resolved: use **Lane Movement Set** for options and **Committed Movement** for per-vehicle choice.
+- "Arm" implied single-lane flow while planning multi-lane support — resolved: **Arm** contains lane groups, not single lanes.
