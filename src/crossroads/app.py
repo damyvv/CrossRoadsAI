@@ -5,21 +5,18 @@ from crossroads.config import (
     BACKGROUND_COLOR,
     CENTER_MARK_COLOR,
     GREEN_DURATION_TICKS,
-    LIGHT_COLOR_GREEN,
-    LIGHT_COLOR_RED,
-    LIGHT_COLOR_YELLOW,
     ROAD_COLOR,
     ROAD_WIDTH,
     STOP_LINE_COLOR,
     STOP_LINE_DISTANCE,
-    TRAFFIC_LIGHT_RADIUS,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     YELLOW_DURATION_TICKS,
 )
 from crossroads.intersection import build_intersection_geometry
-from crossroads.traffic_light import LightState, TrafficLightController
-from crossroads.traffic_phasing import ArmPhase
+from crossroads.traffic_light import TrafficLightController
+from crossroads.traffic_light_rendering import draw_traffic_lights
+from crossroads.traffic_phasing import default_four_way_phases
 
 
 CENTER_LINE_COLOR = (200, 200, 200)
@@ -57,13 +54,6 @@ def _draw_dashed_line(surface: pygame.Surface, color: tuple[int, int, int], star
                     pygame.draw.line(surface, color, seg_start, seg_end, width)
 
 
-_LIGHT_COLORS = {
-    LightState.GREEN: LIGHT_COLOR_GREEN,
-    LightState.YELLOW: LIGHT_COLOR_YELLOW,
-    LightState.RED: LIGHT_COLOR_RED,
-}
-
-
 def run(*, max_frames: int | None = None) -> None:
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -78,10 +68,7 @@ def run(*, max_frames: int | None = None) -> None:
         stop_line_distance=STOP_LINE_DISTANCE,
     )
 
-    arm_phases = [
-        ArmPhase(arms=["N", "S"], name="NS"),
-        ArmPhase(arms=["E", "W"], name="EW"),
-    ]
+    arm_phases = list(default_four_way_phases())
     controller = TrafficLightController(
         arm_names=[arm.name for arm in geometry.arms],
         phases=arm_phases,
@@ -127,13 +114,13 @@ def run(*, max_frames: int | None = None) -> None:
         adjusted_center = (center_x, center_y)
         pygame.draw.circle(screen, CENTER_MARK_COLOR, adjusted_center, 4)
 
-        for arm in geometry.arms:
-            mid_x = (arm.stop_line[0][0] + arm.stop_line[1][0]) // 2
-            mid_y = (arm.stop_line[0][1] + arm.stop_line[1][1]) // 2
-            adj_x = center_x - WINDOW_WIDTH // 2 + mid_x
-            adj_y = center_y - WINDOW_HEIGHT // 2 + mid_y
-            color = _LIGHT_COLORS[controller.state(arm.name)]
-            pygame.draw.circle(screen, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
+        draw_traffic_lights(
+            surface=screen,
+            arms=geometry.arms,
+            controller=controller,
+            center_x=center_x,
+            center_y=center_y,
+        )
 
         controller.advance_tick()
 

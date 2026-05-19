@@ -1,5 +1,4 @@
 """Tests for TrafficLight state machine and TrafficLightController phasing."""
-import pytest
 from crossroads.traffic_light import LightState, TrafficLight, TrafficLightController
 from crossroads.traffic_phasing import ArmPhase
 
@@ -90,3 +89,47 @@ class TestTrafficLightControllerPhasing:
         assert ctrl.state("S") == LightState.GREEN
         assert ctrl.state("E") == LightState.RED
         assert ctrl.state("W") == LightState.RED
+
+
+class TestTrafficLightControllerConfiguration:
+    def test_rejects_phases_missing_arms(self):
+        phases = [
+            ArmPhase(arms=["N", "S"], name="NS"),
+            ArmPhase(arms=["E"], name="E-only"),
+        ]
+
+        try:
+            TrafficLightController(
+                arm_names=["N", "S", "E", "W"],
+                phases=phases,
+                green_ticks=3,
+                yellow_ticks=2,
+            )
+        except ValueError as exc:
+            assert "missing" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError for missing phase arms")
+
+    def test_rejects_phases_with_duplicate_arms(self):
+        phases = [
+            ArmPhase(arms=["N", "S"], name="NS"),
+            ArmPhase(arms=["N", "E", "W"], name="NEW"),
+        ]
+
+        try:
+            TrafficLightController(
+                arm_names=["N", "S", "E", "W"],
+                phases=phases,
+                green_ticks=3,
+                yellow_ticks=2,
+            )
+        except ValueError as exc:
+            assert "duplicate" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError for duplicate phase arms")
+
+
+class TestArmPhaseInput:
+    def test_accepts_tuple_arms(self):
+        phase = ArmPhase(arms=("N", "S"), name="NS")
+        assert phase.arms == ("N", "S")
