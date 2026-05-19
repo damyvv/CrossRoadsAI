@@ -1,0 +1,26 @@
+# Window
+window_width: 960
+window_height: 720
+
+# Intersection
+arm_count: 4
+
+# Road
+road_width: 120
+stop_line_distance: 70
+
+# Vehicle
+vehicle_top_speed: 4.0
+vehicle_acceleration: 0.2
+vehicle_deceleration: 0.3
+vehicle_length: 24
+vehicle_width: 12
+vehicle_queue_gap: 8
+vehicle_stop_distance_before_line: 10.0
+vehicle_spawn_rate_per_second: 2.0
+
+# Simulation
+green_duration_ticks: 150
+yellow_duration_ticks: 60
+simulation_ticks_per_second: 60
+vehicle_spawn_seed: 42

@@ -27,3 +27,22 @@ def test_app_exits_cleanly_headless():
     assert "video system not initialized" not in result.stderr, (
         f"video system not initialized found: {result.stderr}"
     )
+
+
+def test_app_rejects_invalid_yaml_config(tmp_path):
+    env = os.environ.copy()
+    env["SDL_VIDEODRIVER"] = "dummy"
+    repo_root = Path(__file__).resolve().parents[1]
+    invalid_config = tmp_path / "invalid.yaml"
+    invalid_config.write_text("unknown_key: true\n")
+
+    result = subprocess.run(
+        [sys.executable, "main.py", "--max-frames", "1", "--config", str(invalid_config)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert "unknown key: unknown_key" in result.stderr

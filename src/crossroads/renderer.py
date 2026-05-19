@@ -83,31 +83,37 @@ def _draw_vehicle(
     position: float,
     center_x: int,
     center_y: int,
+    *,
+    world_window_width: int,
+    world_window_height: int,
+    road_width: int,
+    vehicle_length: int,
+    vehicle_width: int,
 ) -> None:
     """Draw a vehicle on the surface."""
     world_x, world_y = lane_center_world_position(
         arm=arm,
         distance=position,
-        window_width=WINDOW_WIDTH,
-        window_height=WINDOW_HEIGHT,
-        road_width=ROAD_WIDTH,
+        window_width=world_window_width,
+        window_height=world_window_height,
+        road_width=road_width,
     )
-    adj_x = center_x - WINDOW_WIDTH // 2 + world_x
-    adj_y = center_y - WINDOW_HEIGHT // 2 + world_y
+    adj_x = center_x - world_window_width // 2 + world_x
+    adj_y = center_y - world_window_height // 2 + world_y
 
     if arm in ("N", "S"):
         rect = pygame.Rect(
-            int(adj_x - VEHICLE_WIDTH // 2),
-            int(adj_y - VEHICLE_LENGTH // 2),
-            VEHICLE_WIDTH,
-            VEHICLE_LENGTH,
+            int(adj_x - vehicle_width // 2),
+            int(adj_y - vehicle_length // 2),
+            vehicle_width,
+            vehicle_length,
         )
     else:
         rect = pygame.Rect(
-            int(adj_x - VEHICLE_LENGTH // 2),
-            int(adj_y - VEHICLE_WIDTH // 2),
-            VEHICLE_LENGTH,
-            VEHICLE_WIDTH,
+            int(adj_x - vehicle_length // 2),
+            int(adj_y - vehicle_width // 2),
+            vehicle_length,
+            vehicle_width,
         )
     pygame.draw.rect(surface, VEHICLE_COLOR, rect)
 
@@ -140,6 +146,12 @@ def render(
     geometry: IntersectionGeometry,
     state: SimulationState,
     average_wait_time: float,
+    *,
+    world_window_width: int = WINDOW_WIDTH,
+    world_window_height: int = WINDOW_HEIGHT,
+    road_width: int = ROAD_WIDTH,
+    vehicle_length: int = VEHICLE_LENGTH,
+    vehicle_width: int = VEHICLE_WIDTH,
 ) -> None:
     """
     Render the intersection simulation to a pygame surface.
@@ -159,8 +171,8 @@ def render(
     # Draw roads
     for rect in geometry.road_rects:
         adjusted_rect = (
-            center_x - WINDOW_WIDTH // 2 + rect[0],
-            center_y - WINDOW_HEIGHT // 2 + rect[1],
+            center_x - world_window_width // 2 + rect[0],
+            center_y - world_window_height // 2 + rect[1],
             rect[2],
             rect[3],
         )
@@ -169,15 +181,27 @@ def render(
     # Draw stop lines
     for arm in geometry.arms:
         start, end = arm.stop_line
-        adjusted_start = (center_x - WINDOW_WIDTH // 2 + start[0], center_y - WINDOW_HEIGHT // 2 + start[1])
-        adjusted_end = (center_x - WINDOW_WIDTH // 2 + end[0], center_y - WINDOW_HEIGHT // 2 + end[1])
+        adjusted_start = (
+            center_x - world_window_width // 2 + start[0],
+            center_y - world_window_height // 2 + start[1],
+        )
+        adjusted_end = (
+            center_x - world_window_width // 2 + end[0],
+            center_y - world_window_height // 2 + end[1],
+        )
         pygame.draw.line(surface, STOP_LINE_COLOR, adjusted_start, adjusted_end, width=3)
 
     # Draw center lines
     for center_line in geometry.arm_center_lines:
         start, end = center_line
-        adjusted_start = (center_x - WINDOW_WIDTH // 2 + start[0], center_y - WINDOW_HEIGHT // 2 + start[1])
-        adjusted_end = (center_x - WINDOW_WIDTH // 2 + end[0], center_y - WINDOW_HEIGHT // 2 + end[1])
+        adjusted_start = (
+            center_x - world_window_width // 2 + start[0],
+            center_y - world_window_height // 2 + start[1],
+        )
+        adjusted_end = (
+            center_x - world_window_width // 2 + end[0],
+            center_y - world_window_height // 2 + end[1],
+        )
         _draw_dashed_line(
             surface, _CENTER_LINE_COLOR, adjusted_start, adjusted_end, width=2, dash_pattern=_CENTER_LINE_DASH_PATTERN
         )
@@ -194,14 +218,19 @@ def render(
             position=vehicle.position,
             center_x=center_x,
             center_y=center_y,
+            world_window_width=world_window_width,
+            world_window_height=world_window_height,
+            road_width=road_width,
+            vehicle_length=vehicle_length,
+            vehicle_width=vehicle_width,
         )
 
     # Draw traffic lights
     for arm in geometry.arms:
         mid_x = (arm.stop_line[0][0] + arm.stop_line[1][0]) // 2
         mid_y = (arm.stop_line[0][1] + arm.stop_line[1][1]) // 2
-        adj_x = center_x - WINDOW_WIDTH // 2 + mid_x
-        adj_y = center_y - WINDOW_HEIGHT // 2 + mid_y
+        adj_x = center_x - world_window_width // 2 + mid_x
+        adj_y = center_y - world_window_height // 2 + mid_y
         color = _LIGHT_COLORS[state.light_states[arm.name]]
         pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
 

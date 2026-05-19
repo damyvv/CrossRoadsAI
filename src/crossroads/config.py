@@ -36,4 +36,4 @@ VEHICLE_COLOR = (70, 130, 240)
 VEHICLE_SPAWN_RATE_PER_SECOND = 2.0
 # Optional per-arm override for spawn rates. Any missing arm uses VEHICLE_SPAWN_RATE_PER_SECOND.
 VEHICLE_SPAWN_RATE_PER_SECOND_BY_ARM: dict[str, float] | None = None
-VEHICLE_SPAWN_SEED: int | None = None
+VEHICLE_SPAWN_SEED: int | None = 42
