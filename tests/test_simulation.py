@@ -21,6 +21,7 @@ def _build_simulation(
     *,
     seed: int | None,
     spawn_rate: float,
+    spawn_rate_by_arm: dict[str, float] | None = None,
     green_ticks: int = GREEN_DURATION_TICKS,
     yellow_ticks: int = YELLOW_DURATION_TICKS,
 ) -> IntersectionSimulation:
@@ -46,6 +47,7 @@ def _build_simulation(
         ),
         spawn=TrafficSpawnConfig(
             lambda_per_second=spawn_rate,
+            lambda_per_second_by_arm=spawn_rate_by_arm,
             ticks_per_second=SIMULATION_TICKS_PER_SECOND,
             seed=seed,
         ),
@@ -79,6 +81,17 @@ def test_state_exposes_light_states_and_vehicle_snapshots():
 def test_same_seed_produces_identical_simulation_sequence():
     first = _build_simulation(seed=11, spawn_rate=4.0)
     second = _build_simulation(seed=11, spawn_rate=4.0)
+
+    for _ in range(120):
+        assert _state_signature(first) == _state_signature(second)
+        first.advance_tick()
+        second.advance_tick()
+
+
+def test_same_seed_produces_identical_simulation_sequence_with_per_arm_spawn_rates():
+    spawn_rate_by_arm = {"N": 7.0, "E": 0.5, "S": 3.0, "W": 1.0}
+    first = _build_simulation(seed=11, spawn_rate=2.0, spawn_rate_by_arm=spawn_rate_by_arm)
+    second = _build_simulation(seed=11, spawn_rate=2.0, spawn_rate_by_arm=spawn_rate_by_arm)
 
     for _ in range(120):
         assert _state_signature(first) == _state_signature(second)

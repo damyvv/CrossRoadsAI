@@ -48,6 +48,77 @@ def test_no_spawn_occurs_when_arm_entry_is_occupied():
     assert spawned_total == 0
 
 
+def test_per_arm_lambda_override_uses_override_for_that_arm():
+    arms = ("N", "E")
+    generator = TrafficGenerator(
+        arm_names=arms,
+        lambda_per_second=0.0,
+        lambda_per_second_by_arm={"N": 120.0},
+        seed=5,
+    )
+    clear_entry = {arm: False for arm in arms}
+    counts = {arm: 0 for arm in arms}
+
+    for _ in range(120):
+        for arm in generator.advance_tick(entry_occupied_by_arm=clear_entry):
+            counts[arm] += 1
+
+    assert counts["N"] > 0
+    assert counts["E"] == 0
+
+
+def test_same_seed_and_per_arm_lambdas_produce_identical_spawn_sequence():
+    arms = ("N", "E", "S", "W")
+    ticks = 300
+    seed = 19
+    per_arm_lambda = {"N": 6.0, "E": 1.0, "S": 4.0, "W": 0.5}
+
+    first = TrafficGenerator(
+        arm_names=arms,
+        lambda_per_second=2.0,
+        lambda_per_second_by_arm=per_arm_lambda,
+        seed=seed,
+    )
+    second = TrafficGenerator(
+        arm_names=arms,
+        lambda_per_second=2.0,
+        lambda_per_second_by_arm=per_arm_lambda,
+        seed=seed,
+    )
+    clear_entry = {arm: False for arm in arms}
+
+    first_sequence = [
+        tuple(first.advance_tick(entry_occupied_by_arm=clear_entry))
+        for _ in range(ticks)
+    ]
+    second_sequence = [
+        tuple(second.advance_tick(entry_occupied_by_arm=clear_entry))
+        for _ in range(ticks)
+    ]
+
+    assert first_sequence == second_sequence
+
+
+def test_different_per_arm_lambdas_produce_different_spawn_counts():
+    arms = ("N", "E", "S", "W")
+    ticks = 2000
+    generator = TrafficGenerator(
+        arm_names=arms,
+        lambda_per_second=1.0,
+        lambda_per_second_by_arm={"N": 10.0, "E": 1.0, "S": 10.0, "W": 1.0},
+        seed=17,
+    )
+    clear_entry = {arm: False for arm in arms}
+    counts = {arm: 0 for arm in arms}
+
+    for _ in range(ticks):
+        for arm in generator.advance_tick(entry_occupied_by_arm=clear_entry):
+            counts[arm] += 1
+
+    assert counts["N"] > counts["E"] * 3
+    assert counts["S"] > counts["W"] * 3
+
+
 def test_spawn_counts_over_1000_ticks_are_within_poisson_bounds():
     arms = ("N", "E", "S", "W")
     ticks = 1000
@@ -118,4 +189,13 @@ def test_rejects_non_integer_ticks_per_second():
             arm_names=("N",),
             lambda_per_second=2.0,
             ticks_per_second=60.0,
+        )
+
+
+def test_rejects_unknown_arm_in_per_arm_lambda_config():
+    with pytest.raises(ValueError, match="unknown arm in lambda_per_second_by_arm"):
+        TrafficGenerator(
+            arm_names=("N", "E"),
+            lambda_per_second=2.0,
+            lambda_per_second_by_arm={"S": 3.0},
         )
