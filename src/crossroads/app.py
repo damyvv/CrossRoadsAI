@@ -4,19 +4,24 @@ from crossroads.config import (
     ARM_COUNT,
     BACKGROUND_COLOR,
     CENTER_MARK_COLOR,
-    GREEN_DURATION_TICKS,
+    LIGHT_COLOR_GREEN,
     ROAD_COLOR,
     ROAD_WIDTH,
     STOP_LINE_COLOR,
     STOP_LINE_DISTANCE,
+    TRAFFIC_LIGHT_RADIUS,
+    VEHICLE_ACCELERATION,
+    VEHICLE_COLOR,
+    VEHICLE_DECELERATION,
+    VEHICLE_LENGTH,
+    VEHICLE_SPAWN_ARM,
+    VEHICLE_TOP_SPEED,
+    VEHICLE_WIDTH,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
-    YELLOW_DURATION_TICKS,
 )
 from crossroads.intersection import build_intersection_geometry
-from crossroads.traffic_light import TrafficLightController
-from crossroads.traffic_light_rendering import draw_traffic_lights
-from crossroads.traffic_phasing import default_four_way_phases
+from crossroads.vehicle import Vehicle, VehicleState, crossing_bounds_for_arm, world_position_for_distance
 
 
 CENTER_LINE_COLOR = (200, 200, 200)
@@ -54,10 +59,58 @@ def _draw_dashed_line(surface: pygame.Surface, color: tuple[int, int, int], star
                     pygame.draw.line(surface, color, seg_start, seg_end, width)
 
 
+def _draw_constant_green_lights(
+    *,
+    surface: pygame.Surface,
+    stop_lines: list[tuple[tuple[int, int], tuple[int, int]]],
+    center_x: int,
+    center_y: int,
+) -> None:
+    for start, end in stop_lines:
+        mid_x = (start[0] + end[0]) // 2
+        mid_y = (start[1] + end[1]) // 2
+        adj_x = center_x - WINDOW_WIDTH // 2 + mid_x
+        adj_y = center_y - WINDOW_HEIGHT // 2 + mid_y
+        pygame.draw.circle(surface, LIGHT_COLOR_GREEN, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
+
+
+def _draw_vehicle(
+    *,
+    surface: pygame.Surface,
+    vehicle: Vehicle,
+    center_x: int,
+    center_y: int,
+) -> None:
+    world_x, world_y = world_position_for_distance(
+        arm=vehicle.arm,
+        distance=vehicle.position,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+    )
+    adj_x = center_x - WINDOW_WIDTH // 2 + world_x
+    adj_y = center_y - WINDOW_HEIGHT // 2 + world_y
+
+    if vehicle.arm in ("N", "S"):
+        rect = pygame.Rect(
+            int(adj_x - VEHICLE_WIDTH // 2),
+            int(adj_y - VEHICLE_LENGTH // 2),
+            VEHICLE_WIDTH,
+            VEHICLE_LENGTH,
+        )
+    else:
+        rect = pygame.Rect(
+            int(adj_x - VEHICLE_LENGTH // 2),
+            int(adj_y - VEHICLE_WIDTH // 2),
+            VEHICLE_LENGTH,
+            VEHICLE_WIDTH,
+        )
+    pygame.draw.rect(surface, VEHICLE_COLOR, rect)
+
+
 def run(*, max_frames: int | None = None) -> None:
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
-    pygame.display.set_caption("CrossRoadsAI — Slice 2")
+    pygame.display.set_caption("CrossRoadsAI — Slice 3")
     clock = pygame.time.Clock()
 
     geometry = build_intersection_geometry(
@@ -68,13 +121,23 @@ def run(*, max_frames: int | None = None) -> None:
         stop_line_distance=STOP_LINE_DISTANCE,
     )
 
-    arm_phases = list(default_four_way_phases())
-    controller = TrafficLightController(
-        arm_names=[arm.name for arm in geometry.arms],
-        phases=arm_phases,
-        green_ticks=GREEN_DURATION_TICKS,
-        yellow_ticks=YELLOW_DURATION_TICKS,
+    crossing_start, crossing_end = crossing_bounds_for_arm(
+        arm=VEHICLE_SPAWN_ARM,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
     )
+    vehicles = [
+        Vehicle(
+            arm=VEHICLE_SPAWN_ARM,
+            crossing_start=crossing_start,
+            crossing_end=crossing_end,
+            target_velocity=VEHICLE_TOP_SPEED,
+            max_velocity=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+        )
+    ]
 
     running = True
     frame_count = 0
@@ -114,15 +177,17 @@ def run(*, max_frames: int | None = None) -> None:
         adjusted_center = (center_x, center_y)
         pygame.draw.circle(screen, CENTER_MARK_COLOR, adjusted_center, 4)
 
-        draw_traffic_lights(
+        _draw_constant_green_lights(
             surface=screen,
-            arms=geometry.arms,
-            controller=controller,
+            stop_lines=[arm.stop_line for arm in geometry.arms],
             center_x=center_x,
             center_y=center_y,
         )
 
-        controller.advance_tick()
+        for vehicle in vehicles:
+            _draw_vehicle(surface=screen, vehicle=vehicle, center_x=center_x, center_y=center_y)
+            vehicle.advance_tick()
+        vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.EXITED]
 
         pygame.display.flip()
         clock.tick(60)
