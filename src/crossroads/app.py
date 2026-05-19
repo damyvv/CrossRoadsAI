@@ -14,6 +14,7 @@ from crossroads.config import (
     VEHICLE_COLOR,
     VEHICLE_DECELERATION,
     VEHICLE_LENGTH,
+    VEHICLE_QUEUE_GAP,
     VEHICLE_SPAWN_RATE_PER_SECOND,
     VEHICLE_SPAWN_SEED,
     VEHICLE_TOP_SPEED,
@@ -126,7 +127,9 @@ def _advance_vehicles(
     vehicles: list[Vehicle],
     arm_names: tuple[str, ...],
     controller: TrafficLightController,
-    queue_gap: float,
+    min_following_distance: float,
+    stop_margin_to_line: float,
+    crossing_distance_by_arm: dict[str, float],
 ) -> None:
     for arm in arm_names:
         arm_vehicles = sorted(
@@ -138,10 +141,11 @@ def _advance_vehicles(
         for index, vehicle in enumerate(arm_vehicles):
             max_position = None
             if index > 0:
-                max_position = arm_vehicles[index - 1].position - queue_gap
+                max_position = arm_vehicles[index - 1].position - min_following_distance
             vehicle.advance_tick(
                 can_enter_intersection=can_enter_intersection,
                 max_position=max_position,
+                signal_stop_position=crossing_distance_by_arm[arm] - stop_margin_to_line,
             )
 
 
@@ -252,7 +256,9 @@ def run(*, max_frames: int | None = None) -> None:
             vehicles=vehicles,
             arm_names=arm_names,
             controller=controller,
-            queue_gap=float(VEHICLE_LENGTH),
+            min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2,
+            crossing_distance_by_arm={arm: threshold.crossing for arm, threshold in thresholds_by_arm.items()},
         )
         vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.DISCARD]
 

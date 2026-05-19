@@ -54,14 +54,16 @@ class Vehicle:
         *,
         can_enter_intersection: bool = True,
         max_position: float | None = None,
+        signal_stop_position: float | None = None,
     ) -> None:
         if self.state == VehicleState.DISCARD:
             return
 
-        blocked_by_signal = not can_enter_intersection and self.position <= self.crossing_distance
+        stop_position = self.crossing_distance if signal_stop_position is None else signal_stop_position
+        blocked_by_signal = not can_enter_intersection and self.position <= stop_position
         self.target_velocity = self._cruise_velocity
         if blocked_by_signal:
-            distance_to_stop_line = max(self.crossing_distance - self.position, 0.0)
+            distance_to_stop_line = max(stop_position - self.position, 0.0)
             max_safe_velocity = sqrt(2 * self.deceleration * distance_to_stop_line)
             self.target_velocity = min(self.target_velocity, max_safe_velocity)
         if max_position is not None:
@@ -77,7 +79,7 @@ class Vehicle:
         self.velocity = min(self.velocity, self.max_velocity)
         upper_bound = self.discard_distance
         if blocked_by_signal:
-            upper_bound = min(upper_bound, self.crossing_distance)
+            upper_bound = min(upper_bound, stop_position)
         if max_position is not None:
             upper_bound = min(upper_bound, max_position)
         if upper_bound < self.position:
@@ -102,7 +104,9 @@ class Vehicle:
             or (blocked_by_leader and self.position < self.crossing_distance)
         ):
             self.state = VehicleState.STOPPED
-        elif self.position >= self.crossing_distance:
+        elif self.position > self.crossing_distance or (
+            self.position >= self.crossing_distance and can_enter_intersection
+        ):
             self.state = VehicleState.CROSSING
         else:
             self.state = VehicleState.APPROACHING

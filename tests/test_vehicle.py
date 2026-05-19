@@ -162,12 +162,16 @@ def test_vehicle_decelerates_to_stop_line_on_red_without_passing():
     )
 
     for _ in range(200):
-        vehicle.advance_tick(can_enter_intersection=False)
+        vehicle.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=thresholds.crossing - (VEHICLE_LENGTH / 2),
+        )
         if vehicle.state == VehicleState.STOPPED:
             break
 
     assert vehicle.state == VehicleState.STOPPED
-    assert vehicle.position <= thresholds.crossing
+    assert vehicle.position <= thresholds.crossing - (VEHICLE_LENGTH / 2)
+    assert thresholds.crossing - vehicle.position >= VEHICLE_LENGTH / 2
     assert thresholds.crossing - vehicle.position <= VEHICLE_LENGTH
 
 
@@ -192,14 +196,22 @@ def test_vehicle_transitions_stopped_to_crossing_when_light_turns_green():
     )
 
     for _ in range(200):
-        vehicle.advance_tick(can_enter_intersection=False)
+        vehicle.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=thresholds.crossing - (VEHICLE_LENGTH / 2),
+        )
         if vehicle.state == VehicleState.STOPPED:
             break
     assert vehicle.state == VehicleState.STOPPED
 
-    vehicle.advance_tick(can_enter_intersection=True)
+    crossed = False
+    for _ in range(120):
+        vehicle.advance_tick(can_enter_intersection=True)
+        if vehicle.state == VehicleState.CROSSING:
+            crossed = True
+            break
 
-    assert vehicle.state == VehicleState.CROSSING
+    assert crossed
 
 
 def test_vehicle_wait_ticks_accumulate_while_stopped():
@@ -223,16 +235,54 @@ def test_vehicle_wait_ticks_accumulate_while_stopped():
     )
 
     for _ in range(200):
-        vehicle.advance_tick(can_enter_intersection=False)
+        vehicle.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=thresholds.crossing - (VEHICLE_LENGTH / 2),
+        )
         if vehicle.state == VehicleState.STOPPED:
             break
 
     start_wait_ticks = vehicle.wait_ticks
     for _ in range(12):
-        vehicle.advance_tick(can_enter_intersection=False)
+        vehicle.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=thresholds.crossing - (VEHICLE_LENGTH / 2),
+        )
 
     assert vehicle.state == VehicleState.STOPPED
     assert vehicle.wait_ticks - start_wait_ticks == 12
+
+
+def test_vehicle_at_stop_line_does_not_become_crossing_when_red():
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    vehicle = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=thresholds.crossing - 10.0,
+    )
+
+    for _ in range(120):
+        vehicle.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=thresholds.crossing,
+        )
+        if vehicle.state == VehicleState.STOPPED:
+            break
+
+    assert vehicle.state == VehicleState.STOPPED
+    assert vehicle.position == thresholds.crossing
 
 
 def test_vehicles_queue_with_gap_and_depart_without_collision():
@@ -267,10 +317,14 @@ def test_vehicles_queue_with_gap_and_depart_without_collision():
     )
 
     for _ in range(180):
-        leader.advance_tick(can_enter_intersection=False)
+        leader.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=thresholds.crossing - (VEHICLE_LENGTH / 2),
+        )
         follower.advance_tick(
             can_enter_intersection=False,
             max_position=leader.position - VEHICLE_LENGTH,
+            signal_stop_position=thresholds.crossing - (VEHICLE_LENGTH / 2),
         )
         assert follower.position <= leader.position - VEHICLE_LENGTH
 

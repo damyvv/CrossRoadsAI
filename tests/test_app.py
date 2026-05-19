@@ -5,6 +5,7 @@ from crossroads.config import (
     VEHICLE_ACCELERATION,
     VEHICLE_DECELERATION,
     VEHICLE_LENGTH,
+    VEHICLE_QUEUE_GAP,
     VEHICLE_TOP_SPEED,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
@@ -80,9 +81,11 @@ def test_advance_vehicles_queues_on_red_and_releases_on_green():
             vehicles=vehicles,
             arm_names=("N", "E", "S", "W"),
             controller=controller,
-            queue_gap=float(VEHICLE_LENGTH),
+            min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2,
+            crossing_distance_by_arm={"N": 0.0, "E": leader.crossing_distance, "S": 0.0, "W": 0.0},
         )
-        assert follower.position <= leader.position - VEHICLE_LENGTH
+        assert follower.position <= leader.position - (VEHICLE_LENGTH + VEHICLE_QUEUE_GAP)
 
     assert leader.wait_ticks > 0
     assert follower.wait_ticks > 0
@@ -97,8 +100,10 @@ def test_advance_vehicles_queues_on_red_and_releases_on_green():
             vehicles=vehicles,
             arm_names=("N", "E", "S", "W"),
             controller=controller,
-            queue_gap=float(VEHICLE_LENGTH),
+            min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2,
+            crossing_distance_by_arm={"N": 0.0, "E": leader.crossing_distance, "S": 0.0, "W": 0.0},
         )
-        assert follower.position <= leader.position - VEHICLE_LENGTH
+        assert follower.position <= leader.position - (VEHICLE_LENGTH + VEHICLE_QUEUE_GAP)
 
     assert follower.position > moved_before
