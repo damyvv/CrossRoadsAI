@@ -1,5 +1,10 @@
 ## Agent skills
 
+## Commit and PR conventions
+
+- Always use **Conventional Commits** for commit messages (for example: `feat: ...`, `fix: ...`, `docs: ...`).
+- If a PR created from an issue will fully resolve that issue, include `Closing #<issue-number>` in the PR body so the issue closes automatically on merge.
+
 ### Issue tracker
 
 Issues are tracked in GitHub Issues for this repository (via `gh`). See `docs/agents/issue-tracker.md`.
