@@ -61,7 +61,7 @@ SDL_VIDEODRIVER=dummy ./.venv/bin/python main.py --max-frames 60  # headless smo
 ## Commit and PR conventions
 
 - Always use **Conventional Commits** for commit messages (for example: `feat: ...`, `fix: ...`, `docs: ...`).
-- If a PR created from an issue will fully resolve that issue, include `Closing #<issue-number>` in the PR body so the issue closes automatically on merge.
+- If a PR created from an issue will fully resolve that issue, include `Closes #<issue-number>` in the PR body so the issue closes automatically on merge.
 
 ## Project conventions
 
