@@ -285,6 +285,39 @@ def test_vehicle_at_stop_line_does_not_become_crossing_when_red():
     assert vehicle.position == thresholds.crossing
 
 
+def test_vehicle_that_passed_stop_target_still_blocks_at_red_before_crossing():
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    stop_target = thresholds.crossing - (VEHICLE_LENGTH / 2) - 10.0
+    vehicle = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=stop_target + 5.0,
+    )
+
+    for _ in range(120):
+        vehicle.advance_tick(
+            can_enter_intersection=False,
+            signal_stop_position=stop_target,
+        )
+        if vehicle.state == VehicleState.STOPPED:
+            break
+
+    assert vehicle.state == VehicleState.STOPPED
+    assert vehicle.position < thresholds.crossing
+
+
 def test_vehicles_queue_with_gap_and_depart_without_collision():
     thresholds = state_thresholds_for_arm(
         arm="N",

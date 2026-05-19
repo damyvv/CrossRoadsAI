@@ -60,7 +60,7 @@ class Vehicle:
             return
 
         stop_position = self.crossing_distance if signal_stop_position is None else signal_stop_position
-        blocked_by_signal = not can_enter_intersection and self.position <= stop_position
+        blocked_by_signal = not can_enter_intersection and self.position <= self.crossing_distance
         self.target_velocity = self._cruise_velocity
         if blocked_by_signal:
             distance_to_stop_line = max(stop_position - self.position, 0.0)
