@@ -6,6 +6,7 @@ from crossroads.config import (
 )
 from crossroads.metrics import MetricsTracker
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
+from crossroads.traffic_light import TrafficLightController
 from crossroads.traffic_phasing import ArmPhase
 
 
@@ -41,16 +42,19 @@ def test_average_wait_time_with_decimal_average():
 
 def test_simulation_records_wait_times_for_exiting_vehicles():
     """Simulation records wait times when vehicles transition to EXITED state."""
-    from crossroads.vehicle import Vehicle, VehicleState
-    
-    simulation = IntersectionSimulation(
+    controller = TrafficLightController(
         arm_names=["N"],
         phases=[ArmPhase(arms=["N"], name="N")],
+        green_ticks=150,
+        yellow_ticks=60,
+    )
+
+    simulation = IntersectionSimulation(
+        arm_names=["N"],
+        controller=controller,
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         stop_line_distance=STOP_LINE_DISTANCE,
-        green_ticks=150,
-        yellow_ticks=60,
         vehicle_flow=VehicleFlowConfig(
             top_speed=10.0,
             acceleration=2.0,
@@ -65,18 +69,18 @@ def test_simulation_records_wait_times_for_exiting_vehicles():
             seed=42,
         ),
     )
-    
+
     # Get initial average (should be 0.0 with no exits yet)
     assert simulation.average_wait_time() == 0.0
-    
+
     # Advance enough ticks for vehicles to spawn, cross, and exit
     for _ in range(400):
         simulation.advance_tick()
-    
+
     # After simulation runs with deterministic spawning and green light,
     # vehicles should have spawned and exited, recording wait times
     avg = simulation.average_wait_time()
-    
+
     # Verify at least one vehicle exited and wait time was recorded
     assert isinstance(avg, float)
     assert avg >= 0.0

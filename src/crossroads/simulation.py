@@ -6,7 +6,6 @@ from typing import Sequence
 from crossroads.metrics import MetricsTracker
 from crossroads.traffic_generator import TrafficGenerator
 from crossroads.traffic_light import LightState, TrafficLightController
-from crossroads.traffic_phasing import ArmPhase
 from crossroads.vehicle import Vehicle, VehicleState, spawn_distance_for_length, state_thresholds_for_arm
 
 
@@ -91,26 +90,21 @@ class IntersectionSimulation:
         self,
         *,
         arm_names: Sequence[str],
-        phases: Sequence[ArmPhase],
         window_width: int,
         window_height: int,
         stop_line_distance: int,
-        green_ticks: int,
-        yellow_ticks: int,
         vehicle_flow: VehicleFlowConfig,
         spawn: TrafficSpawnConfig,
+        controller: TrafficLightController,
     ) -> None:
         self._arm_names = tuple(arm_names)
         if not self._arm_names:
             raise ValueError("arm_names must not be empty")
+        if controller is None:
+            raise ValueError("controller must be provided")
 
         self._vehicle_flow = vehicle_flow
-        self._controller = TrafficLightController(
-            arm_names=list(self._arm_names),
-            phases=list(phases),
-            green_ticks=green_ticks,
-            yellow_ticks=yellow_ticks,
-        )
+        self._controller = controller
         self._thresholds_by_arm = {
             arm_name: state_thresholds_for_arm(
                 arm=arm_name,
@@ -153,7 +147,7 @@ class IntersectionSimulation:
     def advance_tick(self) -> None:
         # Track previous states to detect transitions to EXITED
         previous_states = {id(vehicle): vehicle.state for vehicle in self._vehicles}
-        
+
         _advance_vehicles(
             vehicles=self._vehicles,
             arm_names=self._arm_names,
@@ -165,13 +159,13 @@ class IntersectionSimulation:
                 arm: threshold.crossing for arm, threshold in self._thresholds_by_arm.items()
             },
         )
-        
+
         # Record wait times for vehicles that just exited
         for vehicle in self._vehicles:
             prev_state = previous_states.get(id(vehicle))
             if prev_state != VehicleState.EXITED and vehicle.state == VehicleState.EXITED:
                 self._metrics.record_wait_time(vehicle.wait_ticks)
-        
+
         self._vehicles = [vehicle for vehicle in self._vehicles if vehicle.state != VehicleState.DISCARD]
         self._controller.advance_tick()
         self._spawn_new_vehicles()
