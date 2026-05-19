@@ -4,14 +4,19 @@ from crossroads.config import (
     ARM_COUNT,
     BACKGROUND_COLOR,
     CENTER_MARK_COLOR,
+    GREEN_DURATION_TICKS,
     ROAD_COLOR,
     ROAD_WIDTH,
     STOP_LINE_COLOR,
     STOP_LINE_DISTANCE,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
+    YELLOW_DURATION_TICKS,
 )
-from crossroads.intersection import ArmGeometry, build_intersection_geometry
+from crossroads.intersection import build_intersection_geometry
+from crossroads.traffic_light import TrafficLightController
+from crossroads.traffic_light_rendering import draw_traffic_lights
+from crossroads.traffic_phasing import default_four_way_phases
 
 
 CENTER_LINE_COLOR = (200, 200, 200)
@@ -52,7 +57,7 @@ def _draw_dashed_line(surface: pygame.Surface, color: tuple[int, int, int], star
 def run(*, max_frames: int | None = None) -> None:
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
-    pygame.display.set_caption("CrossRoadsAI — Slice 1")
+    pygame.display.set_caption("CrossRoadsAI — Slice 2")
     clock = pygame.time.Clock()
 
     geometry = build_intersection_geometry(
@@ -61,6 +66,14 @@ def run(*, max_frames: int | None = None) -> None:
         arm_count=ARM_COUNT,
         road_width=ROAD_WIDTH,
         stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    arm_phases = list(default_four_way_phases())
+    controller = TrafficLightController(
+        arm_names=[arm.name for arm in geometry.arms],
+        phases=arm_phases,
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
     )
 
     running = True
@@ -100,6 +113,17 @@ def run(*, max_frames: int | None = None) -> None:
 
         adjusted_center = (center_x, center_y)
         pygame.draw.circle(screen, CENTER_MARK_COLOR, adjusted_center, 4)
+
+        draw_traffic_lights(
+            surface=screen,
+            arms=geometry.arms,
+            controller=controller,
+            center_x=center_x,
+            center_y=center_y,
+        )
+
+        controller.advance_tick()
+
         pygame.display.flip()
         clock.tick(60)
         frame_count += 1
@@ -107,4 +131,3 @@ def run(*, max_frames: int | None = None) -> None:
             running = False
 
     pygame.quit()
-
