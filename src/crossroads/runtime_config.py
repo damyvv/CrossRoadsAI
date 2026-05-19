@@ -57,6 +57,7 @@ _VALID_ARMS_BY_COUNT = {
     3: {"N", "E", "W"},
     4: {"N", "E", "S", "W"},
 }
+_SUPPORTED_ARM_COUNTS = {4}
 
 
 def _load_raw_yaml(path: Path) -> dict[str, Any]:
@@ -157,6 +158,8 @@ def _parse_spawn_rates_by_arm(
 def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
     _validate_known_keys(data)
     arm_count = _parse_int(data, "arm_count", allowed={2, 3, 4})
+    if arm_count not in _SUPPORTED_ARM_COUNTS:
+        raise ValueError("arm_count must be 4 in this slice; topology YAML support lands in #25")
     spawn_rates_by_arm = _parse_spawn_rates_by_arm(data, arm_count=arm_count)
 
     return RuntimeConfig(
@@ -195,6 +198,8 @@ def legacy_runtime_config() -> RuntimeConfig:
         raise ValueError(
             "config.py fallback requires VEHICLE_SPAWN_SEED to be set during YAML transition"
         )
+    if legacy_config.ARM_COUNT not in _SUPPORTED_ARM_COUNTS:
+        raise ValueError("config.py fallback currently supports ARM_COUNT=4 only")
     return RuntimeConfig(
         window_width=legacy_config.WINDOW_WIDTH,
         window_height=legacy_config.WINDOW_HEIGHT,

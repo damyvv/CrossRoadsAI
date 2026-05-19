@@ -125,3 +125,35 @@ def test_resolve_runtime_config_falls_back_to_legacy_constants(tmp_path):
     assert runtime_config.window_height == legacy_config.WINDOW_HEIGHT
     assert runtime_config.arm_count == legacy_config.ARM_COUNT
     assert runtime_config.vehicle_spawn_seed == legacy_config.VEHICLE_SPAWN_SEED
+
+
+def test_load_runtime_config_rejects_unsupported_arm_count_for_current_slice(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window_width: 960",
+                "window_height: 720",
+                "arm_count: 3",
+                "road_width: 120",
+                "stop_line_distance: 70",
+                "green_duration_ticks: 150",
+                "yellow_duration_ticks: 60",
+                "simulation_ticks_per_second: 60",
+                "vehicle_top_speed: 4.0",
+                "vehicle_acceleration: 0.20",
+                "vehicle_deceleration: 0.30",
+                "vehicle_length: 24",
+                "vehicle_width: 12",
+                "vehicle_queue_gap: 8",
+                "vehicle_stop_distance_before_line: 10.0",
+                "vehicle_spawn_rate_per_second: 2.0",
+                "vehicle_spawn_seed: 7",
+            ]
+        )
+    )
+
+    with pytest.raises(
+        ValueError, match="arm_count must be 4 in this slice; topology YAML support lands in #25"
+    ):
+        load_runtime_config(config_path)
