@@ -9,7 +9,7 @@ from crossroads.config import (
     WINDOW_WIDTH,
 )
 from crossroads.intersection import ArmGeometry
-from crossroads.traffic_light import LightState, TrafficLightController
+from crossroads.traffic_light import LightState
 
 _LIGHT_COLORS = {
     LightState.GREEN: LIGHT_COLOR_GREEN,
@@ -22,7 +22,7 @@ def draw_traffic_lights(
     *,
     surface: pygame.Surface,
     arms: tuple[ArmGeometry, ...],
-    controller: TrafficLightController,
+    light_states: dict[str, LightState],
     center_x: int,
     center_y: int,
 ) -> None:
@@ -31,5 +31,5 @@ def draw_traffic_lights(
         mid_y = (arm.stop_line[0][1] + arm.stop_line[1][1]) // 2
         adj_x = center_x - WINDOW_WIDTH // 2 + mid_x
         adj_y = center_y - WINDOW_HEIGHT // 2 + mid_y
-        color = _LIGHT_COLORS[controller.state(arm.name)]
+        color = _LIGHT_COLORS[light_states[arm.name]]
         pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)

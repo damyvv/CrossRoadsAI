@@ -25,17 +25,10 @@ from crossroads.config import (
     YELLOW_DURATION_TICKS,
 )
 from crossroads.intersection import build_intersection_geometry
-from crossroads.traffic_generator import TrafficGenerator
-from crossroads.traffic_light import LightState, TrafficLightController
+from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
 from crossroads.traffic_light_rendering import draw_traffic_lights
 from crossroads.traffic_phasing import default_four_way_phases
-from crossroads.vehicle import (
-    Vehicle,
-    VehicleState,
-    lane_center_world_position,
-    spawn_distance_for_length,
-    state_thresholds_for_arm,
-)
+from crossroads.vehicle import lane_center_world_position
 
 
 CENTER_LINE_COLOR = (200, 200, 200)
@@ -76,13 +69,14 @@ def _draw_dashed_line(surface: pygame.Surface, color: tuple[int, int, int], star
 def _draw_vehicle(
     *,
     surface: pygame.Surface,
-    vehicle: Vehicle,
+    arm: str,
+    position: float,
     center_x: int,
     center_y: int,
 ) -> None:
     world_x, world_y = lane_center_world_position(
-        arm=vehicle.arm,
-        distance=vehicle.position,
+        arm=arm,
+        distance=position,
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         road_width=ROAD_WIDTH,
@@ -90,7 +84,7 @@ def _draw_vehicle(
     adj_x = center_x - WINDOW_WIDTH // 2 + world_x
     adj_y = center_y - WINDOW_HEIGHT // 2 + world_y
 
-    if vehicle.arm in ("N", "S"):
+    if arm in ("N", "S"):
         rect = pygame.Rect(
             int(adj_x - VEHICLE_WIDTH // 2),
             int(adj_y - VEHICLE_LENGTH // 2),
@@ -107,51 +101,6 @@ def _draw_vehicle(
     pygame.draw.rect(surface, VEHICLE_COLOR, rect)
 
 
-def _entry_occupied_by_arm(
-    *,
-    arm_names: tuple[str, ...],
-    vehicles: list[Vehicle],
-    entry_distance: float,
-    clearance_distance: float,
-) -> dict[str, bool]:
-    if clearance_distance < 0:
-        raise ValueError("clearance_distance must be non-negative")
-    blocked_distance = entry_distance + clearance_distance
-    return {
-        arm: any(vehicle.arm == arm and vehicle.position <= blocked_distance for vehicle in vehicles)
-        for arm in arm_names
-    }
-
-
-def _advance_vehicles(
-    *,
-    vehicles: list[Vehicle],
-    arm_names: tuple[str, ...],
-    controller: TrafficLightController,
-    min_following_distance: float,
-    stop_margin_to_line: float,
-    crossing_distance_by_arm: dict[str, float],
-) -> None:
-    if stop_margin_to_line < 0:
-        raise ValueError("stop_margin_to_line must be non-negative")
-    for arm in arm_names:
-        arm_vehicles = sorted(
-            (vehicle for vehicle in vehicles if vehicle.arm == arm),
-            key=lambda vehicle: vehicle.position,
-            reverse=True,
-        )
-        can_enter_intersection = controller.state(arm) == LightState.GREEN
-        for index, vehicle in enumerate(arm_vehicles):
-            max_position = None
-            if index > 0:
-                max_position = arm_vehicles[index - 1].position - min_following_distance
-            vehicle.advance_tick(
-                can_enter_intersection=can_enter_intersection,
-                max_position=max_position,
-                signal_stop_position=crossing_distance_by_arm[arm] - stop_margin_to_line,
-            )
-
-
 def run(*, max_frames: int | None = None) -> None:
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -166,63 +115,38 @@ def run(*, max_frames: int | None = None) -> None:
         stop_line_distance=STOP_LINE_DISTANCE,
     )
 
-    controller = TrafficLightController(
-        arm_names=[arm.name for arm in geometry.arms],
-        phases=list(default_four_way_phases()),
+    simulation = IntersectionSimulation(
+        arm_names=tuple(arm.name for arm in geometry.arms),
+        phases=default_four_way_phases(),
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
         green_ticks=GREEN_DURATION_TICKS,
         yellow_ticks=YELLOW_DURATION_TICKS,
+        vehicle_flow=VehicleFlowConfig(
+            top_speed=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+            length=VEHICLE_LENGTH,
+            queue_gap=VEHICLE_QUEUE_GAP,
+            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        ),
+        spawn=TrafficSpawnConfig(
+            lambda_per_second=VEHICLE_SPAWN_RATE_PER_SECOND,
+            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+            seed=VEHICLE_SPAWN_SEED,
+        ),
     )
-
-    arm_names = tuple(arm.name for arm in geometry.arms)
-    thresholds_by_arm = {
-        arm_name: state_thresholds_for_arm(
-            arm=arm_name,
-            window_width=WINDOW_WIDTH,
-            window_height=WINDOW_HEIGHT,
-            stop_line_distance=STOP_LINE_DISTANCE,
-            vehicle_length=VEHICLE_LENGTH,
-        )
-        for arm_name in arm_names
-    }
-    spawn_distance = spawn_distance_for_length(VEHICLE_LENGTH)
-    traffic_generator = TrafficGenerator(
-        arm_names=arm_names,
-        lambda_per_second=VEHICLE_SPAWN_RATE_PER_SECOND,
-        ticks_per_second=SIMULATION_TICKS_PER_SECOND,
-        seed=VEHICLE_SPAWN_SEED,
-    )
-    vehicles: list[Vehicle] = []
 
     running = True
     frame_count = 0
     while running:
+        simulation_state = simulation.state()
         current_width, current_height = screen.get_size()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-        occupied_entries = _entry_occupied_by_arm(
-            arm_names=arm_names,
-            vehicles=vehicles,
-            entry_distance=spawn_distance,
-            clearance_distance=float(VEHICLE_LENGTH),
-        )
-        for spawn_arm in traffic_generator.advance_tick(entry_occupied_by_arm=occupied_entries):
-            thresholds = thresholds_by_arm[spawn_arm]
-            vehicles.append(
-                Vehicle(
-                    arm=spawn_arm,
-                    crossing_distance=thresholds.crossing,
-                    exit_distance=thresholds.exited,
-                    discard_distance=thresholds.discard,
-                    target_velocity=VEHICLE_TOP_SPEED,
-                    max_velocity=VEHICLE_TOP_SPEED,
-                    acceleration=VEHICLE_ACCELERATION,
-                    deceleration=VEHICLE_DECELERATION,
-                    position=spawn_distance,
-                )
-            )
 
         screen.fill(BACKGROUND_COLOR)
 
@@ -253,27 +177,24 @@ def run(*, max_frames: int | None = None) -> None:
         adjusted_center = (center_x, center_y)
         pygame.draw.circle(screen, CENTER_MARK_COLOR, adjusted_center, 4)
 
-        for vehicle in vehicles:
-            _draw_vehicle(surface=screen, vehicle=vehicle, center_x=center_x, center_y=center_y)
-        _advance_vehicles(
-            vehicles=vehicles,
-            arm_names=arm_names,
-            controller=controller,
-            min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
-            stop_margin_to_line=float(VEHICLE_LENGTH) / 2 + VEHICLE_STOP_DISTANCE_BEFORE_LINE,
-            crossing_distance_by_arm={arm: threshold.crossing for arm, threshold in thresholds_by_arm.items()},
-        )
-        vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.DISCARD]
+        for vehicle in simulation_state.vehicles:
+            _draw_vehicle(
+                surface=screen,
+                arm=vehicle.arm,
+                position=vehicle.position,
+                center_x=center_x,
+                center_y=center_y,
+            )
 
         draw_traffic_lights(
             surface=screen,
             arms=geometry.arms,
-            controller=controller,
+            light_states=simulation_state.light_states,
             center_x=center_x,
             center_y=center_y,
         )
 
-        controller.advance_tick()
+        simulation.advance_tick()
 
         pygame.display.flip()
         clock.tick(SIMULATION_TICKS_PER_SECOND)
