@@ -5,6 +5,9 @@ from crossroads.config import (
     BACKGROUND_COLOR,
     CENTER_MARK_COLOR,
     GREEN_DURATION_TICKS,
+    HUD_BACKGROUND_COLOR,
+    HUD_PADDING,
+    HUD_TEXT_COLOR,
     ROAD_COLOR,
     ROAD_WIDTH,
     SIMULATION_TICKS_PER_SECOND,
@@ -34,9 +37,6 @@ from crossroads.vehicle import lane_center_world_position
 CENTER_LINE_COLOR = (200, 200, 200)
 CENTER_LINE_DASH_PATTERN = [4, 4]
 
-HUD_TEXT_COLOR = (255, 255, 255)
-HUD_BACKGROUND_COLOR = (50, 50, 50)
-HUD_PADDING = 10
 HUD_CORNER = "top-right"
 
 
