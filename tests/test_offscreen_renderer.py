@@ -1,0 +1,220 @@
+"""
+Offscreen renderer tests that verify rendering to pygame surfaces without a display.
+"""
+import os
+
+import pytest
+
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+import pygame
+
+from crossroads.config import (
+    GREEN_DURATION_TICKS,
+    LIGHT_COLOR_GREEN,
+    LIGHT_COLOR_RED,
+    LIGHT_COLOR_YELLOW,
+    ROAD_COLOR,
+    SIMULATION_TICKS_PER_SECOND,
+    STOP_LINE_DISTANCE,
+    TRAFFIC_LIGHT_RADIUS,
+    VEHICLE_ACCELERATION,
+    VEHICLE_COLOR,
+    VEHICLE_DECELERATION,
+    VEHICLE_LENGTH,
+    VEHICLE_QUEUE_GAP,
+    VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+    VEHICLE_TOP_SPEED,
+    VEHICLE_WIDTH,
+    WINDOW_HEIGHT,
+    WINDOW_WIDTH,
+    YELLOW_DURATION_TICKS,
+)
+from crossroads.intersection import build_intersection_geometry
+from crossroads.renderer import render
+from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
+from crossroads.traffic_light import LightState, TrafficLightController
+from crossroads.traffic_phasing import default_four_way_phases
+
+
+@pytest.fixture(scope="module", autouse=True)
+def init_pygame():
+    """Initialize pygame with dummy video driver for tests."""
+    if not pygame.get_init():
+        pygame.init()
+    yield
+    pygame.quit()
+
+
+def test_offscreen_render_without_display():
+    """Verify that rendering works with offscreen surface without pygame.display."""
+    pygame.init()
+
+    # Create offscreen surface
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+    # Build geometry
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=25,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    # Create a simple simulation state
+    from crossroads.simulation import SimulationState, VehicleSnapshot
+    from crossroads.vehicle import VehicleState
+
+    state = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        vehicles=(
+            VehicleSnapshot(arm="N", position=100.0, state=VehicleState.APPROACHING, wait_ticks=5),
+            VehicleSnapshot(arm="E", position=80.0, state=VehicleState.STOPPED, wait_ticks=0),
+        ),
+    )
+
+    # Render to offscreen surface
+    render(surface=surface, geometry=geometry, state=state, average_wait_time=1.5)
+
+    # Verify surface was rendered
+    assert surface.get_size() == (WINDOW_WIDTH, WINDOW_HEIGHT)
+
+
+def test_offscreen_renderer_draws_traffic_lights():
+    """Verify that renderer draws traffic lights with correct colors."""
+    pygame.init()
+
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=25,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    from crossroads.simulation import SimulationState
+
+    # Test GREEN light
+    state_green = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        vehicles=(),
+    )
+    render(surface=surface, geometry=geometry, state=state_green, average_wait_time=0.0)
+
+    # Get the N arm stop line center (approximately where green light should be)
+    n_arm = geometry.arms[0]  # N arm
+    light_x = (n_arm.stop_line[0][0] + n_arm.stop_line[1][0]) // 2
+    light_y = (n_arm.stop_line[0][1] + n_arm.stop_line[1][1]) // 2
+
+    center_x = WINDOW_WIDTH // 2
+    center_y = WINDOW_HEIGHT // 2
+    adj_x = center_x - WINDOW_WIDTH // 2 + light_x
+    adj_y = center_y - WINDOW_HEIGHT // 2 + light_y
+
+    # Check that a pixel near the light center has a green-ish color
+    # (allowing for anti-aliasing and rasterization)
+    pixel = surface.get_at((adj_x, adj_y))
+    # GREEN light should be (0, 255, 0) or close to it
+    assert pixel[1] > 200, f"Expected green pixel, got {pixel} at ({adj_x}, {adj_y})"
+
+
+def test_offscreen_renderer_draws_vehicles():
+    """Verify that renderer draws vehicles with correct color."""
+    pygame.init()
+
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=25,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    from crossroads.simulation import SimulationState, VehicleSnapshot
+    from crossroads.vehicle import VehicleState
+
+    # Create a vehicle on the North arm at a known position
+    state = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        vehicles=(VehicleSnapshot(arm="N", position=150.0, state=VehicleState.CROSSING, wait_ticks=0),),
+    )
+
+    render(surface=surface, geometry=geometry, state=state, average_wait_time=0.0)
+
+    # The vehicle should be drawn somewhere on the surface
+    # Find a pixel that matches the vehicle color
+    vehicle_color = VEHICLE_COLOR
+    found_vehicle_pixel = False
+    for x in range(WINDOW_WIDTH):
+        for y in range(WINDOW_HEIGHT):
+            pixel = surface.get_at((x, y))
+            # Check if pixel matches vehicle color (allowing small tolerance)
+            if (
+                abs(pixel[0] - vehicle_color[0]) < 5
+                and abs(pixel[1] - vehicle_color[1]) < 5
+                and abs(pixel[2] - vehicle_color[2]) < 5
+            ):
+                found_vehicle_pixel = True
+                break
+        if found_vehicle_pixel:
+            break
+
+    assert found_vehicle_pixel, "Vehicle not found in rendered surface"
+
+
+def test_offscreen_renderer_with_full_simulation():
+    """Verify renderer works with a full simulation running headlessly."""
+    pygame.init()
+
+    # Create simulation with injected controller
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
+    simulation = IntersectionSimulation(
+        arm_names=("N", "E", "S", "W"),
+        controller=controller,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_flow=VehicleFlowConfig(
+            top_speed=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+            length=VEHICLE_LENGTH,
+            queue_gap=VEHICLE_QUEUE_GAP,
+            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        ),
+        spawn=TrafficSpawnConfig(
+            lambda_per_second=2.0,
+            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+            seed=42,
+        ),
+    )
+
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=25,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    # Create offscreen surface
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+    # Run simulation and render several frames
+    for _ in range(10):
+        state = simulation.state()
+        avg_wait = simulation.average_wait_time()
+        render(surface=surface, geometry=geometry, state=state, average_wait_time=avg_wait)
+        simulation.advance_tick()
+
+    # If we got here without errors, rendering worked
+    assert True

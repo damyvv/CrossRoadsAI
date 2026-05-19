@@ -91,26 +91,34 @@ class IntersectionSimulation:
         self,
         *,
         arm_names: Sequence[str],
-        phases: Sequence[ArmPhase],
         window_width: int,
         window_height: int,
         stop_line_distance: int,
-        green_ticks: int,
-        yellow_ticks: int,
         vehicle_flow: VehicleFlowConfig,
         spawn: TrafficSpawnConfig,
+        phases: Sequence[ArmPhase] | None = None,
+        green_ticks: int | None = None,
+        yellow_ticks: int | None = None,
+        controller: TrafficLightController | None = None,
     ) -> None:
         self._arm_names = tuple(arm_names)
         if not self._arm_names:
             raise ValueError("arm_names must not be empty")
 
         self._vehicle_flow = vehicle_flow
-        self._controller = TrafficLightController(
-            arm_names=list(self._arm_names),
-            phases=list(phases),
-            green_ticks=green_ticks,
-            yellow_ticks=yellow_ticks,
-        )
+        if controller is not None:
+            self._controller = controller
+        else:
+            if phases is None or green_ticks is None or yellow_ticks is None:
+                raise ValueError(
+                    "Either controller must be provided, or all of phases, green_ticks, and yellow_ticks must be provided"
+                )
+            self._controller = TrafficLightController(
+                arm_names=list(self._arm_names),
+                phases=list(phases),
+                green_ticks=green_ticks,
+                yellow_ticks=yellow_ticks,
+            )
         self._thresholds_by_arm = {
             arm_name: state_thresholds_for_arm(
                 arm=arm_name,
