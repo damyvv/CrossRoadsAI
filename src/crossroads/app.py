@@ -12,6 +12,7 @@ from crossroads.config import (
     VEHICLE_QUEUE_GAP,
     VEHICLE_STOP_DISTANCE_BEFORE_LINE,
     VEHICLE_SPAWN_RATE_PER_SECOND,
+    VEHICLE_SPAWN_RATE_PER_SECOND_BY_ARM,
     VEHICLE_SPAWN_SEED,
     VEHICLE_TOP_SPEED,
     WINDOW_HEIGHT,
@@ -62,6 +63,7 @@ def run(*, max_frames: int | None = None) -> None:
         ),
         spawn=TrafficSpawnConfig(
             lambda_per_second=VEHICLE_SPAWN_RATE_PER_SECOND,
+            lambda_per_second_by_arm=VEHICLE_SPAWN_RATE_PER_SECOND_BY_ARM,
             ticks_per_second=SIMULATION_TICKS_PER_SECOND,
             seed=VEHICLE_SPAWN_SEED,
         ),

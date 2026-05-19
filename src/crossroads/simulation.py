@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from crossroads.metrics import MetricsTracker
 from crossroads.traffic_generator import TrafficGenerator
@@ -24,6 +24,7 @@ class TrafficSpawnConfig:
     lambda_per_second: float
     ticks_per_second: int
     seed: int | None
+    lambda_per_second_by_arm: Mapping[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,7 @@ class IntersectionSimulation:
         self._traffic_generator = TrafficGenerator(
             arm_names=self._arm_names,
             lambda_per_second=spawn.lambda_per_second,
+            lambda_per_second_by_arm=spawn.lambda_per_second_by_arm,
             ticks_per_second=spawn.ticks_per_second,
             seed=spawn.seed,
         )
