@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
+from crossroads.metrics import MetricsTracker
 from crossroads.traffic_generator import TrafficGenerator
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import ArmPhase
@@ -128,6 +129,7 @@ class IntersectionSimulation:
             seed=spawn.seed,
         )
         self._vehicles: list[Vehicle] = []
+        self._metrics = MetricsTracker()
         self._spawn_new_vehicles()
 
     def state(self) -> SimulationState:
@@ -144,7 +146,14 @@ class IntersectionSimulation:
             ),
         )
 
+    def average_wait_time(self) -> float:
+        """Return the average wait time in ticks for exited vehicles."""
+        return self._metrics.average_wait_time()
+
     def advance_tick(self) -> None:
+        # Track previous states to detect transitions to EXITED
+        previous_states = {id(vehicle): vehicle.state for vehicle in self._vehicles}
+        
         _advance_vehicles(
             vehicles=self._vehicles,
             arm_names=self._arm_names,
@@ -156,6 +165,13 @@ class IntersectionSimulation:
                 arm: threshold.crossing for arm, threshold in self._thresholds_by_arm.items()
             },
         )
+        
+        # Record wait times for vehicles that just exited
+        for vehicle in self._vehicles:
+            prev_state = previous_states.get(id(vehicle))
+            if prev_state != VehicleState.EXITED and vehicle.state == VehicleState.EXITED:
+                self._metrics.record_wait_time(vehicle.wait_ticks)
+        
         self._vehicles = [vehicle for vehicle in self._vehicles if vehicle.state != VehicleState.DISCARD]
         self._controller.advance_tick()
         self._spawn_new_vehicles()

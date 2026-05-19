@@ -34,6 +34,42 @@ from crossroads.vehicle import lane_center_world_position
 CENTER_LINE_COLOR = (200, 200, 200)
 CENTER_LINE_DASH_PATTERN = [4, 4]
 
+HUD_TEXT_COLOR = (255, 255, 255)
+HUD_BACKGROUND_COLOR = (50, 50, 50)
+HUD_PADDING = 10
+HUD_CORNER = "top-right"
+
+
+def _draw_hud_metrics(surface: pygame.Surface, average_wait_time: float, screen_width: int, screen_height: int) -> None:
+    """Draw a HUD overlay showing metrics in a corner of the screen."""
+    font = pygame.font.Font(None, 24)
+    text_surface = font.render(f"Avg Wait: {average_wait_time:.2f}s", True, HUD_TEXT_COLOR)
+    
+    text_width = text_surface.get_width()
+    text_height = text_surface.get_height()
+    
+    if HUD_CORNER == "top-right":
+        bg_rect = pygame.Rect(
+            screen_width - text_width - 2 * HUD_PADDING,
+            HUD_PADDING,
+            text_width + 2 * HUD_PADDING,
+            text_height + 2 * HUD_PADDING,
+        )
+        text_x = bg_rect.left + HUD_PADDING
+        text_y = bg_rect.top + HUD_PADDING
+    else:
+        bg_rect = pygame.Rect(
+            HUD_PADDING,
+            HUD_PADDING,
+            text_width + 2 * HUD_PADDING,
+            text_height + 2 * HUD_PADDING,
+        )
+        text_x = bg_rect.left + HUD_PADDING
+        text_y = bg_rect.top + HUD_PADDING
+    
+    pygame.draw.rect(surface, HUD_BACKGROUND_COLOR, bg_rect)
+    surface.blit(text_surface, (text_x, text_y))
+
 
 def _draw_dashed_line(surface: pygame.Surface, color: tuple[int, int, int], start: tuple[int, int], end: tuple[int, int], width: int = 1, dash_pattern: list[int] | None = None) -> None:
     if dash_pattern is None:
@@ -192,6 +228,16 @@ def run(*, max_frames: int | None = None) -> None:
             light_states=simulation_state.light_states,
             center_x=center_x,
             center_y=center_y,
+        )
+
+        # Draw HUD with metrics
+        average_wait_ticks = simulation.average_wait_time()
+        average_wait_seconds = average_wait_ticks / SIMULATION_TICKS_PER_SECOND
+        _draw_hud_metrics(
+            surface=screen,
+            average_wait_time=average_wait_seconds,
+            screen_width=current_width,
+            screen_height=current_height,
         )
 
         simulation.advance_tick()
