@@ -17,15 +17,21 @@ from crossroads.traffic_light import LightState
 from crossroads.traffic_phasing import default_four_way_phases
 
 
-def _build_simulation(*, seed: int | None, spawn_rate: float) -> IntersectionSimulation:
+def _build_simulation(
+    *,
+    seed: int | None,
+    spawn_rate: float,
+    green_ticks: int = GREEN_DURATION_TICKS,
+    yellow_ticks: int = YELLOW_DURATION_TICKS,
+) -> IntersectionSimulation:
     return IntersectionSimulation(
         arm_names=("N", "E", "S", "W"),
         phases=default_four_way_phases(),
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         stop_line_distance=STOP_LINE_DISTANCE,
-        green_ticks=GREEN_DURATION_TICKS,
-        yellow_ticks=YELLOW_DURATION_TICKS,
+        green_ticks=green_ticks,
+        yellow_ticks=yellow_ticks,
         vehicle_flow=VehicleFlowConfig(
             top_speed=VEHICLE_TOP_SPEED,
             acceleration=VEHICLE_ACCELERATION,
@@ -74,3 +80,25 @@ def test_same_seed_produces_identical_simulation_sequence():
         assert _state_signature(first) == _state_signature(second)
         first.advance_tick()
         second.advance_tick()
+
+
+def test_advance_tick_performs_phase_handoff_after_green_and_yellow():
+    simulation = _build_simulation(seed=3, spawn_rate=0.0, green_ticks=3, yellow_ticks=2)
+
+    for _ in range(3):
+        simulation.advance_tick()
+    state_after_green = simulation.state()
+
+    assert state_after_green.light_states["N"] == LightState.YELLOW
+    assert state_after_green.light_states["S"] == LightState.YELLOW
+    assert state_after_green.light_states["E"] == LightState.RED
+    assert state_after_green.light_states["W"] == LightState.RED
+
+    for _ in range(2):
+        simulation.advance_tick()
+    state_after_handoff = simulation.state()
+
+    assert state_after_handoff.light_states["N"] == LightState.RED
+    assert state_after_handoff.light_states["S"] == LightState.RED
+    assert state_after_handoff.light_states["E"] == LightState.GREEN
+    assert state_after_handoff.light_states["W"] == LightState.GREEN
