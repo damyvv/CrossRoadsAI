@@ -105,9 +105,18 @@ def _draw_vehicle(
     pygame.draw.rect(surface, VEHICLE_COLOR, rect)
 
 
-def _entry_occupied_by_arm(*, arm_names: tuple[str, ...], vehicles: list[Vehicle], entry_distance: float) -> dict[str, bool]:
+def _entry_occupied_by_arm(
+    *,
+    arm_names: tuple[str, ...],
+    vehicles: list[Vehicle],
+    entry_distance: float,
+    clearance_distance: float,
+) -> dict[str, bool]:
+    if clearance_distance < 0:
+        raise ValueError("clearance_distance must be non-negative")
+    blocked_distance = entry_distance + clearance_distance
     return {
-        arm: any(vehicle.arm == arm and vehicle.position <= entry_distance for vehicle in vehicles)
+        arm: any(vehicle.arm == arm and vehicle.position <= blocked_distance for vehicle in vehicles)
         for arm in arm_names
     }
 
@@ -166,6 +175,7 @@ def run(*, max_frames: int | None = None) -> None:
             arm_names=arm_names,
             vehicles=vehicles,
             entry_distance=spawn_distance,
+            clearance_distance=float(VEHICLE_LENGTH),
         )
         for spawn_arm in traffic_generator.advance_tick(entry_occupied_by_arm=occupied_entries):
             thresholds = thresholds_by_arm[spawn_arm]

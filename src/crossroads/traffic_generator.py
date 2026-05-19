@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import exp
+from math import exp, isfinite
 from random import Random
 from typing import Mapping
 
 
 def _sample_poisson(*, lambda_per_tick: float, rng: Random) -> int:
+    if not isfinite(lambda_per_tick) or lambda_per_tick < 0:
+        raise ValueError("lambda_per_tick must be finite and non-negative")
     if lambda_per_tick == 0.0:
         return 0
 
@@ -33,8 +35,14 @@ class TrafficGenerator:
     def __post_init__(self) -> None:
         if not self.arm_names:
             raise ValueError("arm_names must not be empty")
+        if len(set(self.arm_names)) != len(self.arm_names):
+            raise ValueError("arm_names must be unique")
+        if not isfinite(self.lambda_per_second):
+            raise ValueError("lambda_per_second must be finite")
         if self.lambda_per_second < 0:
             raise ValueError("lambda_per_second must be non-negative")
+        if not isinstance(self.ticks_per_second, int):
+            raise ValueError("ticks_per_second must be an integer")
         if self.ticks_per_second <= 0:
             raise ValueError("ticks_per_second must be positive")
 

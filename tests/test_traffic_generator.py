@@ -1,5 +1,7 @@
-from crossroads.traffic_generator import TrafficGenerator
 from math import ceil, floor, sqrt
+import pytest
+
+from crossroads.traffic_generator import TrafficGenerator
 
 
 def test_same_seed_produces_identical_spawn_sequence():
@@ -87,3 +89,33 @@ def test_all_four_arms_receive_spawns_over_time():
 
     for arm in arms:
         assert counts[arm] > 0
+
+
+def test_rejects_duplicate_arm_names():
+    with pytest.raises(ValueError, match="arm_names must be unique"):
+        TrafficGenerator(
+            arm_names=("N", "N"),
+            lambda_per_second=2.0,
+        )
+
+
+def test_rejects_non_finite_lambda_per_second():
+    with pytest.raises(ValueError, match="lambda_per_second must be finite"):
+        TrafficGenerator(
+            arm_names=("N",),
+            lambda_per_second=float("nan"),
+        )
+    with pytest.raises(ValueError, match="lambda_per_second must be finite"):
+        TrafficGenerator(
+            arm_names=("N",),
+            lambda_per_second=float("inf"),
+        )
+
+
+def test_rejects_non_integer_ticks_per_second():
+    with pytest.raises(ValueError, match="ticks_per_second must be an integer"):
+        TrafficGenerator(
+            arm_names=("N",),
+            lambda_per_second=2.0,
+            ticks_per_second=60.0,
+        )
