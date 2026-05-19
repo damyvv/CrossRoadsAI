@@ -1,4 +1,3 @@
-from crossroads.app import _advance_vehicles, _entry_occupied_by_arm
 from crossroads.config import (
     GREEN_DURATION_TICKS,
     STOP_LINE_DISTANCE,
@@ -12,6 +11,7 @@ from crossroads.config import (
     WINDOW_WIDTH,
     YELLOW_DURATION_TICKS,
 )
+from crossroads.simulation import _advance_vehicles, _entry_occupied_by_arm
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
 from crossroads.vehicle import Vehicle, VehicleState, spawn_distance_for_length, state_thresholds_for_arm
