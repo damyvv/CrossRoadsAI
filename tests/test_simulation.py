@@ -13,7 +13,7 @@ from crossroads.config import (
     YELLOW_DURATION_TICKS,
 )
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
-from crossroads.traffic_light import LightState
+from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
 
 
@@ -24,14 +24,18 @@ def _build_simulation(
     green_ticks: int = GREEN_DURATION_TICKS,
     yellow_ticks: int = YELLOW_DURATION_TICKS,
 ) -> IntersectionSimulation:
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=green_ticks,
+        yellow_ticks=yellow_ticks,
+    )
     return IntersectionSimulation(
         arm_names=("N", "E", "S", "W"),
-        phases=default_four_way_phases(),
+        controller=controller,
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         stop_line_distance=STOP_LINE_DISTANCE,
-        green_ticks=green_ticks,
-        yellow_ticks=yellow_ticks,
         vehicle_flow=VehicleFlowConfig(
             top_speed=VEHICLE_TOP_SPEED,
             acceleration=VEHICLE_ACCELERATION,

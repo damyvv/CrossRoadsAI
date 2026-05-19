@@ -1,8 +1,6 @@
 """
 Headless simulation tests that verify deterministic behavior without a display.
 """
-import pytest
-
 from crossroads.config import (
     GREEN_DURATION_TICKS,
     SIMULATION_TICKS_PER_SECOND,
@@ -87,7 +85,7 @@ def test_headless_simulation_snapshot_determinism():
         green_ticks=GREEN_DURATION_TICKS,
         yellow_ticks=YELLOW_DURATION_TICKS,
     )
-    
+
     sim1 = _build_simulation_with_injected_controller(
         controller=controller1,
         seed=123,
@@ -98,19 +96,19 @@ def test_headless_simulation_snapshot_determinism():
         seed=123,
         spawn_rate=2.5,
     )
-    
+
     # Run both simulations for 60 ticks
     tick_count = 60
     for _ in range(tick_count):
         state1 = sim1.state()
         state2 = sim2.state()
-        
+
         # Verify light states match
         assert state1.light_states == state2.light_states
-        
+
         # Verify vehicle count matches
         assert len(state1.vehicles) == len(state2.vehicles)
-        
+
         # Verify vehicle positions and states match (within floating point tolerance)
         for v1, v2 in zip(state1.vehicles, state2.vehicles):
             assert v1.arm == v2.arm
@@ -123,24 +121,27 @@ def test_headless_simulation_snapshot_determinism():
 
 
 def test_headless_simulation_metrics_available():
-    """Verify that simulation metrics are available in headless mode."""
+    """Verify metrics are produced from actual simulated traffic activity."""
     controller = TrafficLightController(
         arm_names=["N", "E", "S", "W"],
         phases=default_four_way_phases(),
-        green_ticks=GREEN_DURATION_TICKS,
-        yellow_ticks=YELLOW_DURATION_TICKS,
+        green_ticks=8,
+        yellow_ticks=2,
     )
-    
+
     simulation = _build_simulation_with_injected_controller(
         controller=controller,
         seed=999,
-        spawn_rate=1.0,
+        spawn_rate=6.0,
     )
-    
-    # Run for a few ticks to generate metrics
-    for _ in range(100):
+
+    observed_vehicle = False
+    for _ in range(220):
+        if simulation.state().vehicles:
+            observed_vehicle = True
         simulation.advance_tick()
-    
+
     avg_wait = simulation.average_wait_time()
+    assert observed_vehicle, "Expected at least one spawned vehicle during the run"
     assert isinstance(avg_wait, (int, float))
-    assert avg_wait >= 0
+    assert avg_wait > 0

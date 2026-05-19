@@ -1,16 +1,13 @@
 """
 Offscreen renderer tests that verify rendering to pygame surfaces without a display.
 """
-import os
-
 import pytest
-
-os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import pygame
 
 from crossroads.config import (
     GREEN_DURATION_TICKS,
+    ROAD_WIDTH,
     SIMULATION_TICKS_PER_SECOND,
     STOP_LINE_DISTANCE,
     VEHICLE_ACCELERATION,
@@ -125,6 +122,7 @@ def test_offscreen_renderer_draws_vehicles():
     )
 
     from crossroads.simulation import SimulationState, VehicleSnapshot
+    from crossroads.vehicle import lane_center_world_position
     from crossroads.vehicle import VehicleState
 
     # Create a vehicle on the North arm at a known position
@@ -135,25 +133,21 @@ def test_offscreen_renderer_draws_vehicles():
 
     render(surface=surface, geometry=geometry, state=state, average_wait_time=0.0)
 
-    # The vehicle should be drawn somewhere on the surface
-    # Find a pixel that matches the vehicle color
-    vehicle_color = VEHICLE_COLOR
-    found_vehicle_pixel = False
-    for x in range(WINDOW_WIDTH):
-        for y in range(WINDOW_HEIGHT):
-            pixel = surface.get_at((x, y))
-            # Check if pixel matches vehicle color (allowing small tolerance)
-            if (
-                abs(pixel[0] - vehicle_color[0]) < 5
-                and abs(pixel[1] - vehicle_color[1]) < 5
-                and abs(pixel[2] - vehicle_color[2]) < 5
-            ):
-                found_vehicle_pixel = True
-                break
-        if found_vehicle_pixel:
-            break
+    world_x, world_y = lane_center_world_position(
+        arm="N",
+        distance=150.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
+    )
+    center_x, center_y = surface.get_width() // 2, surface.get_height() // 2
+    pixel_x = center_x - WINDOW_WIDTH // 2 + int(world_x)
+    pixel_y = center_y - WINDOW_HEIGHT // 2 + int(world_y)
 
-    assert found_vehicle_pixel, "Vehicle not found in rendered surface"
+    pixel = surface.get_at((pixel_x, pixel_y))
+    assert tuple(pixel[:3]) == VEHICLE_COLOR, (
+        f"Expected vehicle color {VEHICLE_COLOR} at ({pixel_x}, {pixel_y}), got {tuple(pixel[:3])}"
+    )
 
 
 def test_offscreen_renderer_with_full_simulation():

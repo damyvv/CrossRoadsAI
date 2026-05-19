@@ -21,6 +21,7 @@ from crossroads.config import (
 from crossroads.intersection import build_intersection_geometry
 from crossroads.renderer import render
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
+from crossroads.traffic_light import TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
 
 
@@ -38,14 +39,19 @@ def run(*, max_frames: int | None = None) -> None:
         stop_line_distance=STOP_LINE_DISTANCE,
     )
 
+    controller = TrafficLightController(
+        arm_names=[arm.name for arm in geometry.arms],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
     simulation = IntersectionSimulation(
         arm_names=tuple(arm.name for arm in geometry.arms),
-        phases=default_four_way_phases(),
+        controller=controller,
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         stop_line_distance=STOP_LINE_DISTANCE,
-        green_ticks=GREEN_DURATION_TICKS,
-        yellow_ticks=YELLOW_DURATION_TICKS,
         vehicle_flow=VehicleFlowConfig(
             top_speed=VEHICLE_TOP_SPEED,
             acceleration=VEHICLE_ACCELERATION,
@@ -65,7 +71,6 @@ def run(*, max_frames: int | None = None) -> None:
     frame_count = 0
     while running:
         simulation_state = simulation.state()
-        current_width, current_height = screen.get_size()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
