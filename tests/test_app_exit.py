@@ -2,16 +2,18 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_app_exits_cleanly_headless():
     """Verify app can exit cleanly in headless mode without pygame.error."""
     env = os.environ.copy()
     env["SDL_VIDEODRIVER"] = "dummy"
+    repo_root = Path(__file__).resolve().parents[1]
 
     result = subprocess.run(
         [sys.executable, "main.py", "--max-frames", "1"],
-        cwd="/home/damyvv/Projects/CrossRoads",
+        cwd=repo_root,
         capture_output=True,
         text=True,
         env=env,
