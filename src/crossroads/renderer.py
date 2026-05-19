@@ -12,7 +12,6 @@ from crossroads.config import (
     HUD_TEXT_COLOR,
     ROAD_COLOR,
     ROAD_WIDTH,
-    SIMULATION_TICKS_PER_SECOND,
     STOP_LINE_COLOR,
     TRAFFIC_LIGHT_RADIUS,
     VEHICLE_COLOR,
