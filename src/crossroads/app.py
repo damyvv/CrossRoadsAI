@@ -212,6 +212,11 @@ def run(*, max_frames: int | None = None) -> None:
         adjusted_center = (center_x, center_y)
         pygame.draw.circle(screen, CENTER_MARK_COLOR, adjusted_center, 4)
 
+        for vehicle in vehicles:
+            _draw_vehicle(surface=screen, vehicle=vehicle, center_x=center_x, center_y=center_y)
+            vehicle.advance_tick()
+        vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.DISCARD]
+
         draw_traffic_lights(
             surface=screen,
             arms=geometry.arms,
@@ -220,10 +225,6 @@ def run(*, max_frames: int | None = None) -> None:
             center_y=center_y,
         )
 
-        for vehicle in vehicles:
-            _draw_vehicle(surface=screen, vehicle=vehicle, center_x=center_x, center_y=center_y)
-            vehicle.advance_tick()
-        vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.DISCARD]
         controller.advance_tick()
 
         pygame.display.flip()
