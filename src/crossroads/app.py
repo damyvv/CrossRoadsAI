@@ -7,13 +7,15 @@ from crossroads.config import (
     GREEN_DURATION_TICKS,
     ROAD_COLOR,
     ROAD_WIDTH,
+    SIMULATION_TICKS_PER_SECOND,
     STOP_LINE_COLOR,
     STOP_LINE_DISTANCE,
     VEHICLE_ACCELERATION,
     VEHICLE_COLOR,
     VEHICLE_DECELERATION,
     VEHICLE_LENGTH,
-    VEHICLE_SPAWN_ARM,
+    VEHICLE_SPAWN_RATE_PER_SECOND,
+    VEHICLE_SPAWN_SEED,
     VEHICLE_TOP_SPEED,
     VEHICLE_WIDTH,
     WINDOW_HEIGHT,
@@ -21,6 +23,7 @@ from crossroads.config import (
     YELLOW_DURATION_TICKS,
 )
 from crossroads.intersection import build_intersection_geometry
+from crossroads.traffic_generator import TrafficGenerator
 from crossroads.traffic_light import TrafficLightController
 from crossroads.traffic_light_rendering import draw_traffic_lights
 from crossroads.traffic_phasing import default_four_way_phases
@@ -102,10 +105,17 @@ def _draw_vehicle(
     pygame.draw.rect(surface, VEHICLE_COLOR, rect)
 
 
+def _entry_occupied_by_arm(*, arm_names: tuple[str, ...], vehicles: list[Vehicle], entry_distance: float) -> dict[str, bool]:
+    return {
+        arm: any(vehicle.arm == arm and vehicle.position <= entry_distance for vehicle in vehicles)
+        for arm in arm_names
+    }
+
+
 def run(*, max_frames: int | None = None) -> None:
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
-    pygame.display.set_caption("CrossRoadsAI — Slice 3")
+    pygame.display.set_caption("CrossRoadsAI — Slice 4")
     clock = pygame.time.Clock()
 
     geometry = build_intersection_geometry(
@@ -123,26 +133,25 @@ def run(*, max_frames: int | None = None) -> None:
         yellow_ticks=YELLOW_DURATION_TICKS,
     )
 
-    thresholds = state_thresholds_for_arm(
-        arm=VEHICLE_SPAWN_ARM,
-        window_width=WINDOW_WIDTH,
-        window_height=WINDOW_HEIGHT,
-        stop_line_distance=STOP_LINE_DISTANCE,
-        vehicle_length=VEHICLE_LENGTH,
-    )
-    vehicles = [
-        Vehicle(
-            arm=VEHICLE_SPAWN_ARM,
-            crossing_distance=thresholds.crossing,
-            exit_distance=thresholds.exited,
-            discard_distance=thresholds.discard,
-            target_velocity=VEHICLE_TOP_SPEED,
-            max_velocity=VEHICLE_TOP_SPEED,
-            acceleration=VEHICLE_ACCELERATION,
-            deceleration=VEHICLE_DECELERATION,
-            position=spawn_distance_for_length(VEHICLE_LENGTH),
+    arm_names = tuple(arm.name for arm in geometry.arms)
+    thresholds_by_arm = {
+        arm_name: state_thresholds_for_arm(
+            arm=arm_name,
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            stop_line_distance=STOP_LINE_DISTANCE,
+            vehicle_length=VEHICLE_LENGTH,
         )
-    ]
+        for arm_name in arm_names
+    }
+    spawn_distance = spawn_distance_for_length(VEHICLE_LENGTH)
+    traffic_generator = TrafficGenerator(
+        arm_names=arm_names,
+        lambda_per_second=VEHICLE_SPAWN_RATE_PER_SECOND,
+        ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+        seed=VEHICLE_SPAWN_SEED,
+    )
+    vehicles: list[Vehicle] = []
 
     running = True
     frame_count = 0
@@ -152,6 +161,27 @@ def run(*, max_frames: int | None = None) -> None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+        occupied_entries = _entry_occupied_by_arm(
+            arm_names=arm_names,
+            vehicles=vehicles,
+            entry_distance=spawn_distance,
+        )
+        for spawn_arm in traffic_generator.advance_tick(entry_occupied_by_arm=occupied_entries):
+            thresholds = thresholds_by_arm[spawn_arm]
+            vehicles.append(
+                Vehicle(
+                    arm=spawn_arm,
+                    crossing_distance=thresholds.crossing,
+                    exit_distance=thresholds.exited,
+                    discard_distance=thresholds.discard,
+                    target_velocity=VEHICLE_TOP_SPEED,
+                    max_velocity=VEHICLE_TOP_SPEED,
+                    acceleration=VEHICLE_ACCELERATION,
+                    deceleration=VEHICLE_DECELERATION,
+                    position=spawn_distance,
+                )
+            )
 
         screen.fill(BACKGROUND_COLOR)
 
@@ -197,7 +227,7 @@ def run(*, max_frames: int | None = None) -> None:
         controller.advance_tick()
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(SIMULATION_TICKS_PER_SECOND)
         frame_count += 1
         if max_frames is not None and frame_count >= max_frames:
             running = False
