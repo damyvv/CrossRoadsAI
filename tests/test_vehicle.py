@@ -139,3 +139,155 @@ def test_vehicle_position_clamps_at_discard_boundary_without_overshoot():
 
 def test_spawn_distance_places_vehicle_fully_outside_entry_side():
     assert spawn_distance_for_length(VEHICLE_LENGTH) < -(VEHICLE_LENGTH / 2)
+
+
+def test_vehicle_decelerates_to_stop_line_on_red_without_passing():
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    vehicle = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=thresholds.crossing - 60.0,
+    )
+
+    for _ in range(200):
+        vehicle.advance_tick(can_enter_intersection=False)
+        if vehicle.state == VehicleState.STOPPED:
+            break
+
+    assert vehicle.state == VehicleState.STOPPED
+    assert vehicle.position <= thresholds.crossing
+    assert thresholds.crossing - vehicle.position <= VEHICLE_LENGTH
+
+
+def test_vehicle_transitions_stopped_to_crossing_when_light_turns_green():
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    vehicle = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=thresholds.crossing - 60.0,
+    )
+
+    for _ in range(200):
+        vehicle.advance_tick(can_enter_intersection=False)
+        if vehicle.state == VehicleState.STOPPED:
+            break
+    assert vehicle.state == VehicleState.STOPPED
+
+    vehicle.advance_tick(can_enter_intersection=True)
+
+    assert vehicle.state == VehicleState.CROSSING
+
+
+def test_vehicle_wait_ticks_accumulate_while_stopped():
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    vehicle = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=thresholds.crossing - 60.0,
+    )
+
+    for _ in range(200):
+        vehicle.advance_tick(can_enter_intersection=False)
+        if vehicle.state == VehicleState.STOPPED:
+            break
+
+    start_wait_ticks = vehicle.wait_ticks
+    for _ in range(12):
+        vehicle.advance_tick(can_enter_intersection=False)
+
+    assert vehicle.state == VehicleState.STOPPED
+    assert vehicle.wait_ticks - start_wait_ticks == 12
+
+
+def test_vehicles_queue_with_gap_and_depart_without_collision():
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    leader = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=thresholds.crossing - 60.0,
+    )
+    follower = Vehicle(
+        arm="N",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=4.0,
+        max_velocity=4.0,
+        acceleration=0.2,
+        deceleration=0.3,
+        position=thresholds.crossing - 100.0,
+    )
+
+    for _ in range(180):
+        leader.advance_tick(can_enter_intersection=False)
+        follower.advance_tick(
+            can_enter_intersection=False,
+            max_position=leader.position - VEHICLE_LENGTH,
+        )
+        assert follower.position <= leader.position - VEHICLE_LENGTH
+
+    assert leader.state == VehicleState.STOPPED
+    assert follower.state == VehicleState.STOPPED
+
+    leader_crossed = False
+    follower_crossed = False
+    for _ in range(120):
+        leader.advance_tick(can_enter_intersection=True)
+        follower.advance_tick(
+            can_enter_intersection=True,
+            max_position=leader.position - VEHICLE_LENGTH,
+        )
+        assert follower.position <= leader.position - VEHICLE_LENGTH
+        leader_crossed = leader_crossed or leader.state == VehicleState.CROSSING
+        follower_crossed = follower_crossed or follower.state == VehicleState.CROSSING
+
+    assert leader_crossed
+    assert follower_crossed

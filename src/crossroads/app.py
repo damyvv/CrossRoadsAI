@@ -24,7 +24,7 @@ from crossroads.config import (
 )
 from crossroads.intersection import build_intersection_geometry
 from crossroads.traffic_generator import TrafficGenerator
-from crossroads.traffic_light import TrafficLightController
+from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_light_rendering import draw_traffic_lights
 from crossroads.traffic_phasing import default_four_way_phases
 from crossroads.vehicle import (
@@ -119,6 +119,30 @@ def _entry_occupied_by_arm(
         arm: any(vehicle.arm == arm and vehicle.position <= blocked_distance for vehicle in vehicles)
         for arm in arm_names
     }
+
+
+def _advance_vehicles(
+    *,
+    vehicles: list[Vehicle],
+    arm_names: tuple[str, ...],
+    controller: TrafficLightController,
+    queue_gap: float,
+) -> None:
+    for arm in arm_names:
+        arm_vehicles = sorted(
+            (vehicle for vehicle in vehicles if vehicle.arm == arm),
+            key=lambda vehicle: vehicle.position,
+            reverse=True,
+        )
+        can_enter_intersection = controller.state(arm) == LightState.GREEN
+        for index, vehicle in enumerate(arm_vehicles):
+            max_position = None
+            if index > 0:
+                max_position = arm_vehicles[index - 1].position - queue_gap
+            vehicle.advance_tick(
+                can_enter_intersection=can_enter_intersection,
+                max_position=max_position,
+            )
 
 
 def run(*, max_frames: int | None = None) -> None:
@@ -224,7 +248,12 @@ def run(*, max_frames: int | None = None) -> None:
 
         for vehicle in vehicles:
             _draw_vehicle(surface=screen, vehicle=vehicle, center_x=center_x, center_y=center_y)
-            vehicle.advance_tick()
+        _advance_vehicles(
+            vehicles=vehicles,
+            arm_names=arm_names,
+            controller=controller,
+            queue_gap=float(VEHICLE_LENGTH),
+        )
         vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.DISCARD]
 
         draw_traffic_lights(

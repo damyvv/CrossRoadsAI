@@ -1,5 +1,6 @@
-from crossroads.app import _entry_occupied_by_arm
+from crossroads.app import _advance_vehicles, _entry_occupied_by_arm
 from crossroads.config import (
+    GREEN_DURATION_TICKS,
     STOP_LINE_DISTANCE,
     VEHICLE_ACCELERATION,
     VEHICLE_DECELERATION,
@@ -7,7 +8,10 @@ from crossroads.config import (
     VEHICLE_TOP_SPEED,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
+    YELLOW_DURATION_TICKS,
 )
+from crossroads.traffic_light import LightState, TrafficLightController
+from crossroads.traffic_phasing import default_four_way_phases
 from crossroads.vehicle import Vehicle, spawn_distance_for_length, state_thresholds_for_arm
 
 
@@ -58,3 +62,43 @@ def test_entry_stays_blocked_until_vehicle_clears_spawn_zone():
 
     assert occupied_before_clear["N"] is True
     assert occupied_after_clear["N"] is False
+
+
+def test_advance_vehicles_queues_on_red_and_releases_on_green():
+    leader = _vehicle_on_arm(arm="E", position=80.0)
+    follower = _vehicle_on_arm(arm="E", position=40.0)
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=list(default_four_way_phases()),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+    vehicles = [leader, follower]
+
+    for _ in range(160):
+        _advance_vehicles(
+            vehicles=vehicles,
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            queue_gap=float(VEHICLE_LENGTH),
+        )
+        assert follower.position <= leader.position - VEHICLE_LENGTH
+
+    assert leader.wait_ticks > 0
+    assert follower.wait_ticks > 0
+
+    for _ in range(GREEN_DURATION_TICKS + YELLOW_DURATION_TICKS):
+        controller.advance_tick()
+    assert controller.state("E") == LightState.GREEN
+
+    moved_before = follower.position
+    for _ in range(10):
+        _advance_vehicles(
+            vehicles=vehicles,
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            queue_gap=float(VEHICLE_LENGTH),
+        )
+        assert follower.position <= leader.position - VEHICLE_LENGTH
+
+    assert follower.position > moved_before

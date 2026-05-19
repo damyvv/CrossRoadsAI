@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from math import sqrt
 
 
 class VehicleState(Enum):
     APPROACHING = auto()
+    STOPPED = auto()
     CROSSING = auto()
     EXITED = auto()
     DISCARD = auto()
@@ -31,6 +33,8 @@ class Vehicle:
     position: float = 0.0
     velocity: float = 0.0
     state: VehicleState = field(default=VehicleState.APPROACHING, init=False)
+    wait_ticks: int = field(default=0, init=False)
+    _cruise_velocity: float = field(default=0.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.crossing_distance < 0 or self.exit_distance < 0 or self.discard_distance < 0:
@@ -42,11 +46,28 @@ class Vehicle:
         if self.target_velocity < 0:
             raise ValueError("target_velocity must be non-negative")
         self.target_velocity = min(self.target_velocity, self.max_velocity)
-        self._update_state()
+        self._cruise_velocity = self.target_velocity
+        self._update_state(can_enter_intersection=True, blocked_by_leader=False)
 
-    def advance_tick(self) -> None:
+    def advance_tick(
+        self,
+        *,
+        can_enter_intersection: bool = True,
+        max_position: float | None = None,
+    ) -> None:
         if self.state == VehicleState.DISCARD:
             return
+
+        blocked_by_signal = not can_enter_intersection and self.position <= self.crossing_distance
+        self.target_velocity = self._cruise_velocity
+        if blocked_by_signal:
+            distance_to_stop_line = max(self.crossing_distance - self.position, 0.0)
+            max_safe_velocity = sqrt(2 * self.deceleration * distance_to_stop_line)
+            self.target_velocity = min(self.target_velocity, max_safe_velocity)
+        if max_position is not None:
+            distance_to_leader = max(max_position - self.position, 0.0)
+            max_safe_velocity = sqrt(2 * self.deceleration * distance_to_leader)
+            self.target_velocity = min(self.target_velocity, max_safe_velocity)
 
         if self.velocity < self.target_velocity:
             self.velocity = min(self.velocity + self.acceleration, self.target_velocity)
@@ -54,14 +75,33 @@ class Vehicle:
             self.velocity = max(self.velocity - self.deceleration, self.target_velocity)
 
         self.velocity = min(self.velocity, self.max_velocity)
-        self.position = min(self.position + self.velocity, self.discard_distance)
-        self._update_state()
+        upper_bound = self.discard_distance
+        if blocked_by_signal:
+            upper_bound = min(upper_bound, self.crossing_distance)
+        if max_position is not None:
+            upper_bound = min(upper_bound, max_position)
+        if upper_bound < self.position:
+            upper_bound = self.position
 
-    def _update_state(self) -> None:
+        self.position = min(self.position + self.velocity, upper_bound)
+        blocked_by_leader = max_position is not None and self.position >= max_position
+        self._update_state(
+            can_enter_intersection=can_enter_intersection,
+            blocked_by_leader=blocked_by_leader,
+        )
+        if self.state == VehicleState.STOPPED:
+            self.wait_ticks += 1
+
+    def _update_state(self, *, can_enter_intersection: bool, blocked_by_leader: bool) -> None:
         if self.position >= self.discard_distance:
             self.state = VehicleState.DISCARD
         elif self.position >= self.exit_distance:
             self.state = VehicleState.EXITED
+        elif self.velocity == 0 and (
+            (not can_enter_intersection and self.position <= self.crossing_distance)
+            or (blocked_by_leader and self.position < self.crossing_distance)
+        ):
+            self.state = VehicleState.STOPPED
         elif self.position >= self.crossing_distance:
             self.state = VehicleState.CROSSING
         else:
