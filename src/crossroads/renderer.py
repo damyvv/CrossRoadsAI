@@ -7,6 +7,9 @@ import pygame
 from crossroads.config import (
     BACKGROUND_COLOR,
     CENTER_MARK_COLOR,
+    HUD_BACKGROUND_COLOR,
+    HUD_PADDING,
+    HUD_TEXT_COLOR,
     ROAD_COLOR,
     ROAD_WIDTH,
     SIMULATION_TICKS_PER_SECOND,
@@ -113,34 +116,21 @@ def _draw_vehicle(
 def _draw_hud_metrics(
     surface: pygame.Surface, average_wait_time: float, screen_width: int, screen_height: int
 ) -> None:
-    """Draw a HUD overlay showing metrics in a corner of the screen."""
-    from crossroads.config import HUD_BACKGROUND_COLOR, HUD_PADDING, HUD_TEXT_COLOR
-
+    """Draw a HUD overlay showing metrics in the top-right corner of the screen."""
     font = pygame.font.Font(None, 24)
     text_surface = font.render(f"Avg Wait: {average_wait_time:.2f}s", True, HUD_TEXT_COLOR)
 
     text_width = text_surface.get_width()
     text_height = text_surface.get_height()
 
-    hud_corner = "top-right"
-    if hud_corner == "top-right":
-        bg_rect = pygame.Rect(
-            screen_width - text_width - 2 * HUD_PADDING,
-            HUD_PADDING,
-            text_width + 2 * HUD_PADDING,
-            text_height + 2 * HUD_PADDING,
-        )
-        text_x = bg_rect.left + HUD_PADDING
-        text_y = bg_rect.top + HUD_PADDING
-    else:
-        bg_rect = pygame.Rect(
-            HUD_PADDING,
-            HUD_PADDING,
-            text_width + 2 * HUD_PADDING,
-            text_height + 2 * HUD_PADDING,
-        )
-        text_x = bg_rect.left + HUD_PADDING
-        text_y = bg_rect.top + HUD_PADDING
+    bg_rect = pygame.Rect(
+        screen_width - text_width - 2 * HUD_PADDING,
+        HUD_PADDING,
+        text_width + 2 * HUD_PADDING,
+        text_height + 2 * HUD_PADDING,
+    )
+    text_x = bg_rect.left + HUD_PADDING
+    text_y = bg_rect.top + HUD_PADDING
 
     pygame.draw.rect(surface, HUD_BACKGROUND_COLOR, bg_rect)
     surface.blit(text_surface, (text_x, text_y))

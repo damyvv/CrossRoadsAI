@@ -11,13 +11,8 @@ import pygame
 
 from crossroads.config import (
     GREEN_DURATION_TICKS,
-    LIGHT_COLOR_GREEN,
-    LIGHT_COLOR_RED,
-    LIGHT_COLOR_YELLOW,
-    ROAD_COLOR,
     SIMULATION_TICKS_PER_SECOND,
     STOP_LINE_DISTANCE,
-    TRAFFIC_LIGHT_RADIUS,
     VEHICLE_ACCELERATION,
     VEHICLE_COLOR,
     VEHICLE_DECELERATION,
@@ -25,7 +20,6 @@ from crossroads.config import (
     VEHICLE_QUEUE_GAP,
     VEHICLE_STOP_DISTANCE_BEFORE_LINE,
     VEHICLE_TOP_SPEED,
-    VEHICLE_WIDTH,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     YELLOW_DURATION_TICKS,
@@ -104,20 +98,17 @@ def test_offscreen_renderer_draws_traffic_lights():
     render(surface=surface, geometry=geometry, state=state_green, average_wait_time=0.0)
 
     # Get the N arm stop line center (approximately where green light should be)
+    # Since the surface is exactly WINDOW_WIDTH x WINDOW_HEIGHT, the light is drawn at its
+    # world coordinates directly (center_x - WINDOW_WIDTH // 2 == 0)
     n_arm = geometry.arms[0]  # N arm
     light_x = (n_arm.stop_line[0][0] + n_arm.stop_line[1][0]) // 2
     light_y = (n_arm.stop_line[0][1] + n_arm.stop_line[1][1]) // 2
 
-    center_x = WINDOW_WIDTH // 2
-    center_y = WINDOW_HEIGHT // 2
-    adj_x = center_x - WINDOW_WIDTH // 2 + light_x
-    adj_y = center_y - WINDOW_HEIGHT // 2 + light_y
-
     # Check that a pixel near the light center has a green-ish color
     # (allowing for anti-aliasing and rasterization)
-    pixel = surface.get_at((adj_x, adj_y))
+    pixel = surface.get_at((light_x, light_y))
     # GREEN light should be (0, 255, 0) or close to it
-    assert pixel[1] > 200, f"Expected green pixel, got {pixel} at ({adj_x}, {adj_y})"
+    assert pixel[1] > 200, f"Expected green pixel, got {pixel} at ({light_x}, {light_y})"
 
 
 def test_offscreen_renderer_draws_vehicles():
@@ -210,11 +201,14 @@ def test_offscreen_renderer_with_full_simulation():
     surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
 
     # Run simulation and render several frames
+    final_state = None
     for _ in range(10):
-        state = simulation.state()
+        final_state = simulation.state()
         avg_wait = simulation.average_wait_time()
-        render(surface=surface, geometry=geometry, state=state, average_wait_time=avg_wait)
+        render(surface=surface, geometry=geometry, state=final_state, average_wait_time=avg_wait)
         simulation.advance_tick()
 
-    # If we got here without errors, rendering worked
-    assert True
+    # Verify simulation produced some state and metrics were tracked
+    assert final_state is not None
+    assert len(final_state.light_states) == 4
+    assert all(arm in final_state.light_states for arm in ["N", "E", "S", "W"])

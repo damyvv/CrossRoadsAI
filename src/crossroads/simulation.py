@@ -106,6 +106,17 @@ class IntersectionSimulation:
             raise ValueError("arm_names must not be empty")
 
         self._vehicle_flow = vehicle_flow
+        
+        # Validate that controller and legacy parameters are mutually exclusive
+        has_controller = controller is not None
+        has_legacy_params = any(x is not None for x in [phases, green_ticks, yellow_ticks])
+        
+        if has_controller and has_legacy_params:
+            raise ValueError(
+                "Cannot provide both 'controller' and any of 'phases', 'green_ticks', or 'yellow_ticks'. "
+                "Either pass an injected controller, or pass the legacy parameters to construct one."
+            )
+        
         if controller is not None:
             self._controller = controller
         else:
