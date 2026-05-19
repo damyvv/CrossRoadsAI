@@ -1,71 +1,56 @@
 import pygame
 
-from crossroads.config import (
-    ARM_COUNT,
-    GREEN_DURATION_TICKS,
-    ROAD_WIDTH,
-    SIMULATION_TICKS_PER_SECOND,
-    STOP_LINE_DISTANCE,
-    VEHICLE_ACCELERATION,
-    VEHICLE_DECELERATION,
-    VEHICLE_LENGTH,
-    VEHICLE_QUEUE_GAP,
-    VEHICLE_STOP_DISTANCE_BEFORE_LINE,
-    VEHICLE_SPAWN_RATE_PER_SECOND,
-    VEHICLE_SPAWN_RATE_PER_SECOND_BY_ARM,
-    VEHICLE_SPAWN_SEED,
-    VEHICLE_TOP_SPEED,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-    YELLOW_DURATION_TICKS,
-)
 from crossroads.intersection import build_intersection_geometry
 from crossroads.renderer import render
+from crossroads.runtime_config import RuntimeConfig, resolve_runtime_config
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
 from crossroads.traffic_light import TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
 
 
-def run(*, max_frames: int | None = None) -> None:
+def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None = None) -> None:
+    runtime_config = runtime_config or resolve_runtime_config(config_path=None)
     pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
+    screen = pygame.display.set_mode(
+        (runtime_config.window_width, runtime_config.window_height), pygame.RESIZABLE
+    )
     pygame.display.set_caption("CrossRoadsAI — Slice 4")
     clock = pygame.time.Clock()
 
     geometry = build_intersection_geometry(
-        window_width=WINDOW_WIDTH,
-        window_height=WINDOW_HEIGHT,
-        arm_count=ARM_COUNT,
-        road_width=ROAD_WIDTH,
-        stop_line_distance=STOP_LINE_DISTANCE,
+        window_width=runtime_config.window_width,
+        window_height=runtime_config.window_height,
+        arm_count=runtime_config.arm_count,
+        road_width=runtime_config.road_width,
+        stop_line_distance=runtime_config.stop_line_distance,
     )
 
     controller = TrafficLightController(
         arm_names=[arm.name for arm in geometry.arms],
         phases=default_four_way_phases(),
-        green_ticks=GREEN_DURATION_TICKS,
-        yellow_ticks=YELLOW_DURATION_TICKS,
+        green_ticks=runtime_config.green_duration_ticks,
+        yellow_ticks=runtime_config.yellow_duration_ticks,
     )
 
     simulation = IntersectionSimulation(
         arm_names=tuple(arm.name for arm in geometry.arms),
         controller=controller,
-        window_width=WINDOW_WIDTH,
-        window_height=WINDOW_HEIGHT,
-        stop_line_distance=STOP_LINE_DISTANCE,
+        window_width=runtime_config.window_width,
+        window_height=runtime_config.window_height,
+        stop_line_distance=runtime_config.stop_line_distance,
         vehicle_flow=VehicleFlowConfig(
-            top_speed=VEHICLE_TOP_SPEED,
-            acceleration=VEHICLE_ACCELERATION,
-            deceleration=VEHICLE_DECELERATION,
-            length=VEHICLE_LENGTH,
-            queue_gap=VEHICLE_QUEUE_GAP,
-            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+            top_speed=runtime_config.vehicle_top_speed,
+            acceleration=runtime_config.vehicle_acceleration,
+            deceleration=runtime_config.vehicle_deceleration,
+            length=runtime_config.vehicle_length,
+            queue_gap=runtime_config.vehicle_queue_gap,
+            stop_distance_before_line=runtime_config.vehicle_stop_distance_before_line,
         ),
         spawn=TrafficSpawnConfig(
-            lambda_per_second=VEHICLE_SPAWN_RATE_PER_SECOND,
-            lambda_per_second_by_arm=VEHICLE_SPAWN_RATE_PER_SECOND_BY_ARM,
-            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
-            seed=VEHICLE_SPAWN_SEED,
+            lambda_per_second=runtime_config.vehicle_spawn_rate_per_second,
+            lambda_per_second_by_arm=runtime_config.vehicle_spawn_rate_per_second_by_arm,
+            ticks_per_second=runtime_config.simulation_ticks_per_second,
+            seed=runtime_config.vehicle_spawn_seed,
         ),
     )
 
@@ -79,19 +64,24 @@ def run(*, max_frames: int | None = None) -> None:
                 running = False
 
         average_wait_ticks = simulation.average_wait_time()
-        average_wait_seconds = average_wait_ticks / SIMULATION_TICKS_PER_SECOND
+        average_wait_seconds = average_wait_ticks / runtime_config.simulation_ticks_per_second
 
         render(
             surface=screen,
             geometry=geometry,
             state=simulation_state,
             average_wait_time=average_wait_seconds,
+            world_window_width=runtime_config.window_width,
+            world_window_height=runtime_config.window_height,
+            road_width=runtime_config.road_width,
+            vehicle_length=runtime_config.vehicle_length,
+            vehicle_width=runtime_config.vehicle_width,
         )
 
         simulation.advance_tick()
 
         pygame.display.flip()
-        clock.tick(SIMULATION_TICKS_PER_SECOND)
+        clock.tick(runtime_config.simulation_ticks_per_second)
         frame_count += 1
         if max_frames is not None and frame_count >= max_frames:
             running = False
