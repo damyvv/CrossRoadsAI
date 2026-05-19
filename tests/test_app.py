@@ -6,6 +6,7 @@ from crossroads.config import (
     VEHICLE_DECELERATION,
     VEHICLE_LENGTH,
     VEHICLE_QUEUE_GAP,
+    VEHICLE_STOP_DISTANCE_BEFORE_LINE,
     VEHICLE_TOP_SPEED,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
@@ -13,7 +14,7 @@ from crossroads.config import (
 )
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
-from crossroads.vehicle import Vehicle, spawn_distance_for_length, state_thresholds_for_arm
+from crossroads.vehicle import Vehicle, VehicleState, spawn_distance_for_length, state_thresholds_for_arm
 
 
 def _vehicle_on_arm(*, arm: str, position: float) -> Vehicle:
@@ -82,7 +83,7 @@ def test_advance_vehicles_queues_on_red_and_releases_on_green():
             arm_names=("N", "E", "S", "W"),
             controller=controller,
             min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
-            stop_margin_to_line=float(VEHICLE_LENGTH) / 2,
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2 + VEHICLE_STOP_DISTANCE_BEFORE_LINE,
             crossing_distance_by_arm={"N": 0.0, "E": leader.crossing_distance, "S": 0.0, "W": 0.0},
         )
         assert follower.position <= leader.position - (VEHICLE_LENGTH + VEHICLE_QUEUE_GAP)
@@ -101,9 +102,35 @@ def test_advance_vehicles_queues_on_red_and_releases_on_green():
             arm_names=("N", "E", "S", "W"),
             controller=controller,
             min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
-            stop_margin_to_line=float(VEHICLE_LENGTH) / 2,
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2 + VEHICLE_STOP_DISTANCE_BEFORE_LINE,
             crossing_distance_by_arm={"N": 0.0, "E": leader.crossing_distance, "S": 0.0, "W": 0.0},
         )
         assert follower.position <= leader.position - (VEHICLE_LENGTH + VEHICLE_QUEUE_GAP)
 
     assert follower.position > moved_before
+
+
+def test_advance_vehicles_respects_configurable_stop_distance_before_line():
+    vehicle = _vehicle_on_arm(arm="E", position=200.0)
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=list(default_four_way_phases()),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+    extra_stop_distance = 15.0
+    stop_margin = (VEHICLE_LENGTH / 2) + extra_stop_distance
+
+    for _ in range(200):
+        _advance_vehicles(
+            vehicles=[vehicle],
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
+            stop_margin_to_line=stop_margin,
+            crossing_distance_by_arm={"N": 0.0, "E": vehicle.crossing_distance, "S": 0.0, "W": 0.0},
+        )
+        if vehicle.state == VehicleState.STOPPED:
+            break
+
+    assert vehicle.position <= vehicle.crossing_distance - stop_margin

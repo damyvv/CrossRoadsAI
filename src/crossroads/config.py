@@ -24,6 +24,9 @@ VEHICLE_DECELERATION = 0.30
 VEHICLE_LENGTH = 24
 VEHICLE_WIDTH = 12
 VEHICLE_QUEUE_GAP = 8
+# Extra distance (in world units) to stop before the stop line.
+# 0 means the front bumper reaches the stop line.
+VEHICLE_STOP_DISTANCE_BEFORE_LINE = 0.0
 VEHICLE_COLOR = (70, 130, 240)
 VEHICLE_SPAWN_RATE_PER_SECOND = 2.0
 VEHICLE_SPAWN_SEED: int | None = None

@@ -15,6 +15,7 @@ from crossroads.config import (
     VEHICLE_DECELERATION,
     VEHICLE_LENGTH,
     VEHICLE_QUEUE_GAP,
+    VEHICLE_STOP_DISTANCE_BEFORE_LINE,
     VEHICLE_SPAWN_RATE_PER_SECOND,
     VEHICLE_SPAWN_SEED,
     VEHICLE_TOP_SPEED,
@@ -131,6 +132,8 @@ def _advance_vehicles(
     stop_margin_to_line: float,
     crossing_distance_by_arm: dict[str, float],
 ) -> None:
+    if stop_margin_to_line < 0:
+        raise ValueError("stop_margin_to_line must be non-negative")
     for arm in arm_names:
         arm_vehicles = sorted(
             (vehicle for vehicle in vehicles if vehicle.arm == arm),
@@ -257,7 +260,7 @@ def run(*, max_frames: int | None = None) -> None:
             arm_names=arm_names,
             controller=controller,
             min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
-            stop_margin_to_line=float(VEHICLE_LENGTH) / 2,
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2 + VEHICLE_STOP_DISTANCE_BEFORE_LINE,
             crossing_distance_by_arm={arm: threshold.crossing for arm, threshold in thresholds_by_arm.items()},
         )
         vehicles = [vehicle for vehicle in vehicles if vehicle.state != VehicleState.DISCARD]
