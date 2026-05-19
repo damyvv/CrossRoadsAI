@@ -1,0 +1,49 @@
+@startuml
+title CrossRoadsAI Application Architecture
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+package "Entry Point" {
+  [main.py] as main
+}
+
+package "Application Layer" {
+  [crossroads.app\n(run loop + rendering)] as app
+  [crossroads.traffic_light_rendering\n(light drawing adapter)] as light_render
+}
+
+package "Simulation Layer" {
+  [crossroads.simulation\nIntersectionSimulation] as simulation
+  [crossroads.traffic_light\nTrafficLightController] as lights
+  [crossroads.traffic_generator\nTrafficGenerator] as generator
+  [crossroads.vehicle\nVehicle] as vehicle
+  [crossroads.traffic_phasing\nArmPhase] as phasing
+}
+
+package "Geometry & Config" {
+  [crossroads.intersection\nbuild_intersection_geometry] as intersection
+  [crossroads.config\nconstants] as config
+}
+
+main --> app : run(max_frames)
+app --> intersection : build geometry
+app --> simulation : create + advance_tick() + state()
+app --> light_render : draw_traffic_lights()
+app --> vehicle : lane_center_world_position()
+app --> config
+
+simulation --> lights
+simulation --> generator
+simulation --> vehicle
+simulation --> phasing
+simulation --> config
+
+light_render --> lights : LightState
+light_render --> intersection : ArmGeometry
+light_render --> config
+
+intersection --> config
+vehicle --> config
+
+@enduml
