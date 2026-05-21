@@ -12,9 +12,14 @@ from crossroads.config import (
     WINDOW_WIDTH,
     YELLOW_DURATION_TICKS,
 )
-from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
+from crossroads.simulation import (
+    InboundLaneSpawnConfig,
+    IntersectionSimulation,
+    TrafficSpawnConfig,
+    VehicleFlowConfig,
+)
 from crossroads.traffic_light import LightState, TrafficLightController
-from crossroads.traffic_phasing import default_four_way_phases
+from crossroads.traffic_phasing import ArmPhase, default_four_way_phases
 
 
 def _build_simulation(
@@ -119,3 +124,109 @@ def test_advance_tick_performs_phase_handoff_after_green_and_yellow():
     assert state_after_handoff.light_states["S"] == LightState.RED
     assert state_after_handoff.light_states["E"] == LightState.GREEN
     assert state_after_handoff.light_states["W"] == LightState.GREEN
+
+
+def _build_single_arm_simulation_for_spawn_tests(
+    *,
+    seed: int | None,
+    spawn_rate: float,
+    inbound_lanes: dict[str, tuple[InboundLaneSpawnConfig, ...]],
+) -> IntersectionSimulation:
+    controller = TrafficLightController(
+        arm_names=["N"],
+        phases=[ArmPhase(arms=("N",), name="N")],
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+    return IntersectionSimulation(
+        arm_names=("N",),
+        controller=controller,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_flow=VehicleFlowConfig(
+            top_speed=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+            length=VEHICLE_LENGTH,
+            queue_gap=VEHICLE_QUEUE_GAP,
+            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        ),
+        spawn=TrafficSpawnConfig(
+            lambda_per_second=spawn_rate,
+            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+            seed=seed,
+            inbound_lanes_by_arm=inbound_lanes,
+        ),
+    )
+
+
+def test_shared_lane_probabilities_drive_committed_movement_deterministically():
+    lane_config = {
+        "N": (
+            InboundLaneSpawnConfig(
+                movements=("left", "right"),
+                movement_probabilities={"left": 1.0, "right": 0.0},
+            ),
+        )
+    }
+    first = _build_single_arm_simulation_for_spawn_tests(
+        seed=13,
+        spawn_rate=600.0,
+        inbound_lanes=lane_config,
+    )
+    second = _build_single_arm_simulation_for_spawn_tests(
+        seed=13,
+        spawn_rate=600.0,
+        inbound_lanes=lane_config,
+    )
+
+    for _ in range(40):
+        first_state = first.state()
+        second_state = second.state()
+        assert tuple(
+            (
+                vehicle.arm,
+                vehicle.lane_index,
+                vehicle.committed_movement,
+                round(vehicle.position, 3),
+                vehicle.state,
+            )
+            for vehicle in first_state.vehicles
+        ) == tuple(
+            (
+                vehicle.arm,
+                vehicle.lane_index,
+                vehicle.committed_movement,
+                round(vehicle.position, 3),
+                vehicle.state,
+            )
+            for vehicle in second_state.vehicles
+        )
+        assert all(vehicle.committed_movement == "left" for vehicle in first_state.vehicles)
+        first.advance_tick()
+        second.advance_tick()
+
+
+def test_spawn_does_not_switch_to_other_lane_when_selected_lane_entry_is_blocked():
+    lane_config = {
+        "N": (
+            InboundLaneSpawnConfig(movements=("straight",)),
+            InboundLaneSpawnConfig(movements=("left",)),
+        )
+    }
+    simulation = _build_single_arm_simulation_for_spawn_tests(
+        seed=1,
+        spawn_rate=600.0,
+        inbound_lanes=lane_config,
+    )
+
+    initial_state = simulation.state()
+    assert len(initial_state.vehicles) == 1
+    assert initial_state.vehicles[0].lane_index == 0
+
+    simulation.advance_tick()
+    state_after_blocked_spawn_attempt = simulation.state()
+
+    assert len(state_after_blocked_spawn_attempt.vehicles) == 1
+    assert all(vehicle.lane_index == 0 for vehicle in state_after_blocked_spawn_attempt.vehicles)
