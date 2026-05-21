@@ -13,11 +13,12 @@ Automates the full workflow to implement a GitHub feature issue: fetching requir
 User: Implement #42
 Agent: 
   1. Read issue #42 to understand requirements
-  2. Checkout and pull latest master
-  3. Create feature branch (e.g., feat/42-descriptive-name)
-  4. Use /tdd skill to implement changes
-  5. Commit and push
-  6. Create PR back to master
+  2. Run a grill-with-docs session to validate and clarify requirements and acceptance criteria before implementing
+  3. Checkout and pull latest master
+  4. Create feature branch (e.g., feat/42-descriptive-name)
+  5. Use /tdd skill to implement changes
+  6. Commit and push
+  7. Create PR back to master
 ```
 
 ## Workflow
@@ -34,7 +35,14 @@ Use GitHub API to read:
 - Labels
 - Any linked PRs/issues
 
-### 3. Setup feature branch
+### 3. Run grill-with-docs session
+
+Before writing code, run a `grill-with-docs` session targeting the issue and the project's documentation (CONTEXT.md, ADRs, and relevant docs). The session should:
+- Ask clarifying questions about acceptance criteria, edge cases, and ambiguous requirements.
+- Confirm which files, configs, or components will change.
+- Produce a concise checklist or update to the issue body summarizing the agreed scope.
+
+### 4. Setup feature branch
 
 Unless user specifies a different base branch:
 - Fetch latest: `git checkout master && git pull origin master`
