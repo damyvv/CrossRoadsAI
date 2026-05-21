@@ -491,9 +491,9 @@ def _parse_inbound_lanes(
                     parsed_movement_probabilities[movement] = parsed_probability
 
             unique_movements = tuple(parsed_movements)
-            if len(unique_movements) > 1:
-                if parsed_movement_probabilities is None:
-                    raise ValueError("shared lane movements require explicit movement_probabilities")
+            if len(unique_movements) > 1 and parsed_movement_probabilities is None:
+                raise ValueError("shared lane movements require explicit movement_probabilities")
+            if parsed_movement_probabilities is not None:
                 expected_keys = set(unique_movements)
                 actual_keys = set(parsed_movement_probabilities)
                 if actual_keys != expected_keys:
