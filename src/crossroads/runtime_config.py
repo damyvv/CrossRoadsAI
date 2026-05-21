@@ -32,6 +32,12 @@ class RuntimeConfig:
     vehicle_spawn_rate_per_second_by_arm: dict[str, float] | None
     vehicle_spawn_seed: int
     phases: tuple[ArmPhase, ...]
+    inbound_lanes_by_arm: dict[str, tuple["InboundLaneConfig", ...]]
+
+
+@dataclass(frozen=True)
+class InboundLaneConfig:
+    movements: tuple[str, ...]
 
 
 _REQUIRED_KEYS = {
@@ -53,7 +59,12 @@ _REQUIRED_KEYS = {
     "vehicle_spawn_rate_per_second",
     "vehicle_spawn_seed",
 }
-_OPTIONAL_KEYS = {"missing_arm", "vehicle_spawn_rate_per_second_by_arm", "_phases_data"}
+_OPTIONAL_KEYS = {
+    "missing_arm",
+    "vehicle_spawn_rate_per_second_by_arm",
+    "_phases_data",
+    "_inbound_lanes_data",
+}
 _ALLOWED_KEYS = _REQUIRED_KEYS | _OPTIONAL_KEYS
 _VALID_ARMS_BY_COUNT = {
     2: {"N", "S"},
@@ -61,6 +72,7 @@ _VALID_ARMS_BY_COUNT = {
     4: {"N", "E", "S", "W"},
 }
 _SUPPORTED_ARM_COUNTS = {4}
+_ALLOWED_LANE_MOVEMENTS = {"left", "straight", "right"}
 
 _NESTED_SECTIONS = {
     "window": {
@@ -160,6 +172,7 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
         allowed_nested_keys = set(key_mapping.keys())
         if section == "intersection":
             allowed_nested_keys.add("missing_arm")
+            allowed_nested_keys.add("inbound_lanes")
         if section == "vehicle":
             allowed_nested_keys.add("spawn_rate_per_second_by_arm")
         
@@ -191,6 +204,8 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     if "intersection" in data and isinstance(data["intersection"], dict):
         if "missing_arm" in data["intersection"]:
             flat["missing_arm"] = data["intersection"]["missing_arm"]
+        if "inbound_lanes" in data["intersection"]:
+            flat["_inbound_lanes_data"] = data["intersection"]["inbound_lanes"]
 
     # Store phases raw data for later parsing
     if "phases" in data:
@@ -368,6 +383,99 @@ def _parse_phases(data: Mapping[str, Any], *, arm_count: int, missing_arm: str |
     )
 
 
+def _default_inbound_lanes_by_arm(*, arm_count: int, missing_arm: str | None) -> dict[str, tuple[InboundLaneConfig, ...]]:
+    return {
+        arm: (InboundLaneConfig(movements=("straight",)),)
+        for arm in sorted(_topology_arms(arm_count=arm_count, missing_arm=missing_arm))
+    }
+
+
+def _parse_inbound_lanes(
+    data: Mapping[str, Any], *, arm_count: int, missing_arm: str | None
+) -> dict[str, tuple[InboundLaneConfig, ...]]:
+    if "_inbound_lanes_data" not in data:
+        return _default_inbound_lanes_by_arm(arm_count=arm_count, missing_arm=missing_arm)
+
+    inbound_lanes_data = data["_inbound_lanes_data"]
+    if not isinstance(inbound_lanes_data, dict):
+        raise ValueError("intersection.inbound_lanes must be a mapping")
+
+    valid_arms = _topology_arms(arm_count=arm_count, missing_arm=missing_arm)
+    parsed: dict[str, tuple[InboundLaneConfig, ...]] = {}
+
+    for arm, lane_items in inbound_lanes_data.items():
+        if not isinstance(arm, str):
+            raise ValueError("intersection.inbound_lanes keys must be arm strings")
+        if arm not in valid_arms:
+            raise ValueError(f"unknown arm in intersection.inbound_lanes: {arm}")
+        if not isinstance(lane_items, list):
+            raise ValueError(f"intersection.inbound_lanes[{arm}] must be a list")
+        if not lane_items:
+            raise ValueError(f"intersection.inbound_lanes[{arm}] must not be empty")
+
+        parsed_lanes: list[InboundLaneConfig] = []
+        for lane_index, lane_item in enumerate(lane_items):
+            if not isinstance(lane_item, dict):
+                raise ValueError(
+                    f"intersection.inbound_lanes[{arm}][{lane_index}] must be a mapping"
+                )
+
+            allowed_lane_keys = {"movements"}
+            unknown_lane_keys = sorted(set(lane_item.keys()) - allowed_lane_keys)
+            if unknown_lane_keys:
+                raise ValueError(
+                    f"unknown key in intersection.inbound_lanes[{arm}][{lane_index}]: {unknown_lane_keys[0]}"
+                )
+            if "movements" not in lane_item:
+                raise ValueError(
+                    f"intersection.inbound_lanes[{arm}][{lane_index}] is missing required key 'movements'"
+                )
+
+            movements = lane_item["movements"]
+            if not isinstance(movements, list):
+                raise ValueError(
+                    f"intersection.inbound_lanes[{arm}][{lane_index}].movements must be a list"
+                )
+            if not movements:
+                raise ValueError(
+                    f"intersection.inbound_lanes[{arm}][{lane_index}].movements must not be empty"
+                )
+
+            parsed_movements: list[str] = []
+            for movement in movements:
+                if not isinstance(movement, str):
+                    raise ValueError(
+                        f"intersection.inbound_lanes[{arm}][{lane_index}].movements must contain strings"
+                    )
+                if movement not in _ALLOWED_LANE_MOVEMENTS:
+                    raise ValueError(
+                        f"invalid movement in intersection.inbound_lanes[{arm}][{lane_index}]: {movement}"
+                    )
+                parsed_movements.append(movement)
+
+            duplicate_movements = sorted(
+                movement
+                for movement in set(parsed_movements)
+                if parsed_movements.count(movement) > 1
+            )
+            if duplicate_movements:
+                raise ValueError(
+                    f"duplicate movements in intersection.inbound_lanes[{arm}][{lane_index}]: {duplicate_movements!r}"
+                )
+
+            parsed_lanes.append(InboundLaneConfig(movements=tuple(parsed_movements)))
+
+        parsed[arm] = tuple(parsed_lanes)
+
+    missing_arms = sorted(valid_arms - set(parsed.keys()))
+    if missing_arms:
+        raise ValueError(
+            f"missing arm definitions in intersection.inbound_lanes: {missing_arms!r}"
+        )
+
+    return parsed
+
+
 def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
     _validate_known_keys(data)
     arm_count = _parse_int(data, "arm_count", allowed={2, 3, 4})
@@ -376,6 +484,9 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
     
     # Parse phases
     phases = _parse_phases(data, arm_count=arm_count, missing_arm=missing_arm)
+    inbound_lanes_by_arm = _parse_inbound_lanes(
+        data, arm_count=arm_count, missing_arm=missing_arm
+    )
     
     spawn_rates_by_arm = _parse_spawn_rates_by_arm(
         data,
@@ -406,6 +517,7 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         vehicle_spawn_rate_per_second_by_arm=spawn_rates_by_arm,
         vehicle_spawn_seed=_parse_int(data, "vehicle_spawn_seed"),
         phases=phases,
+        inbound_lanes_by_arm=inbound_lanes_by_arm,
     )
 
 
@@ -448,6 +560,9 @@ def legacy_runtime_config() -> RuntimeConfig:
         phases=(
             ArmPhase(arms=("N", "S"), name="NS"),
             ArmPhase(arms=("E", "W"), name="EW"),
+        ),
+        inbound_lanes_by_arm=_default_inbound_lanes_by_arm(
+            arm_count=legacy_config.ARM_COUNT, missing_arm=None
         ),
     )
 
