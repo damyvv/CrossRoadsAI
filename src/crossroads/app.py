@@ -4,7 +4,6 @@ from crossroads.intersection import (
     build_intersection_geometry,
     compute_road_width_by_arm_from_inbound_lanes,
     compute_road_width_from_inbound_lanes,
-    derive_carriageway_separation,
 )
 from crossroads.renderer import render
 from crossroads.runtime_config import RuntimeConfig, resolve_runtime_config
@@ -25,14 +24,6 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         else runtime_config.vehicle_width
     )
     outbound_lane_count = 2
-    carriageway_separation = (
-        derive_carriageway_separation(
-            lane_width=lane_width,
-            carriageway_separation=runtime_config.road_carriageway_separation,
-        )
-        if runtime_config.road_lane_width is not None
-        else 0
-    )
     road_width_by_arm = (
         compute_road_width_by_arm_from_inbound_lanes(
             inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm,
@@ -71,8 +62,18 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         }
         if runtime_config.road_lane_width is not None
         else None,
+        straight_capable_lane_indices_by_arm={
+            arm: tuple(
+                lane_index
+                for lane_index, lane in enumerate(lanes)
+                if "straight" in lane.movements
+            )
+            for arm, lanes in runtime_config.inbound_lanes_by_arm.items()
+        }
+        if runtime_config.road_lane_width is not None
+        else None,
         lane_width=lane_width if runtime_config.road_lane_width is not None else None,
-        carriageway_separation=carriageway_separation,
+        carriageway_separation_override=runtime_config.road_carriageway_separation,
         outbound_lane_count=outbound_lane_count,
         stop_line_distance=runtime_config.stop_line_distance,
     )
@@ -137,7 +138,6 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
             world_window_height=runtime_config.window_height,
             road_width=road_width,
             lane_width=lane_width,
-            carriageway_separation=carriageway_separation,
             vehicle_length=runtime_config.vehicle_length,
             vehicle_width=runtime_config.vehicle_width,
         )

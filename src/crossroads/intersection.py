@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from math import ceil
 from typing import Callable
 
 
@@ -9,6 +10,7 @@ class ArmGeometry:
     position: tuple[int, int]
     stop_line: tuple[tuple[int, int], tuple[int, int]]
     center_line: tuple[tuple[int, int], tuple[int, int]]
+    carriageway_separation: int
 
 
 @dataclass(frozen=True)
@@ -74,8 +76,9 @@ def build_intersection_geometry(
     road_width: int | None = None,
     road_width_by_arm: Mapping[str, int] | None = None,
     inbound_lane_count_by_arm: Mapping[str, int] | None = None,
+    straight_capable_lane_indices_by_arm: Mapping[str, Sequence[int]] | None = None,
     lane_width: int | None = None,
-    carriageway_separation: int | None = None,
+    carriageway_separation_override: int | None = None,
     outbound_lane_count: int = 2,
     stop_line_distance: int,
 ) -> IntersectionGeometry:
@@ -110,7 +113,7 @@ def build_intersection_geometry(
         inbound_width_by_arm = {arm: road_width_by_arm[arm] // 2 for arm in arm_names}
         outbound_width_by_arm = {arm: road_width_by_arm[arm] // 2 for arm in arm_names}
         legacy_mode = True
-        derived_carriageway_separation = 0
+        effective_carriageway_separation_by_arm = {arm: 0 for arm in arm_names}
     else:
         if lane_width is None:
             raise ValueError("lane_width is required when inbound_lane_count_by_arm is provided")
@@ -128,15 +131,20 @@ def build_intersection_geometry(
             arm: outbound_lane_count * lane_width for arm in arm_names
         }
         legacy_mode = False
-        derived_carriageway_separation = derive_carriageway_separation(
+        effective_carriageway_separation_by_arm = derive_carriageway_separation_by_arm(
+            arm_names=arm_names,
+            inbound_lane_count_by_arm=inbound_lane_count_by_arm,
+            straight_capable_lane_indices_by_arm=straight_capable_lane_indices_by_arm,
             lane_width=lane_width,
-            carriageway_separation=carriageway_separation,
+            outbound_lane_count=outbound_lane_count,
+            carriageway_separation_override=carriageway_separation_override,
         )
 
-    if legacy_mode and carriageway_separation is not None:
-        if carriageway_separation < 0:
-            raise ValueError("carriageway_separation must be >= 0")
-        derived_carriageway_separation = carriageway_separation
+    if legacy_mode:
+        override = _validated_carriageway_separation_override(
+            carriageway_separation_override
+        )
+        effective_carriageway_separation_by_arm = {arm: override for arm in arm_names}
 
     arms = []
     center_lines = []
@@ -160,7 +168,7 @@ def build_intersection_geometry(
             dx=dx,
             dy=dy,
             inbound_width=inbound_width_by_arm[name],
-            carriageway_separation=derived_carriageway_separation,
+            carriageway_separation=effective_carriageway_separation_by_arm[name],
         )
 
         arms.append(
@@ -169,9 +177,11 @@ def build_intersection_geometry(
                 position=position,
                 stop_line=stop_line,
                 center_line=center_line,
+                carriageway_separation=effective_carriageway_separation_by_arm[name],
             )
         )
-        center_lines.append(center_line)
+        if effective_carriageway_separation_by_arm[name] <= 0:
+            center_lines.append(center_line)
 
     road_rects = _build_road_rects(
         arm_count=arm_count,
@@ -184,7 +194,7 @@ def build_intersection_geometry(
         inbound_width_by_arm=inbound_width_by_arm,
         outbound_width_by_arm=outbound_width_by_arm,
         legacy_mode=legacy_mode,
-        carriageway_separation=derived_carriageway_separation,
+        carriageway_separation_by_arm=effective_carriageway_separation_by_arm,
         road_width=road_width,
     )
 
@@ -217,7 +227,7 @@ def _build_road_rects(
     inbound_width_by_arm: Mapping[str, int],
     outbound_width_by_arm: Mapping[str, int],
     legacy_mode: bool,
-    carriageway_separation: int,
+    carriageway_separation_by_arm: Mapping[str, int],
     road_width: int | None,
 ) -> list[tuple[int, int, int, int]]:
     if legacy_mode:
@@ -252,21 +262,24 @@ def _build_road_rects(
 
     _ = (arm_count, missing_arm)
     road_rects: list[tuple[int, int, int, int]] = []
-    half_separation = carriageway_separation // 2
     for arm in arm_names:
+        negative_gap, positive_gap = _split_carriageway_gap(
+            carriageway_separation_by_arm[arm]
+        )
         inbound_width = inbound_width_by_arm[arm]
         outbound_width = outbound_width_by_arm[arm]
-        full_width = inbound_width + outbound_width + carriageway_separation
         if arm == "N":
-            road_rects.append((cx - half_separation - inbound_width, 0, full_width, cy))
+            road_rects.append((cx - negative_gap - inbound_width, 0, inbound_width, cy))
+            road_rects.append((cx + positive_gap, 0, outbound_width, cy))
         elif arm == "S":
-            road_rects.append(
-                (cx - half_separation - outbound_width, cy, full_width, window_height - cy)
-            )
+            road_rects.append((cx - negative_gap - outbound_width, cy, outbound_width, window_height - cy))
+            road_rects.append((cx + positive_gap, cy, inbound_width, window_height - cy))
         elif arm == "E":
-            road_rects.append((cx, cy - half_separation - inbound_width, window_width - cx, full_width))
+            road_rects.append((cx, cy - negative_gap - inbound_width, window_width - cx, inbound_width))
+            road_rects.append((cx, cy + positive_gap, window_width - cx, outbound_width))
         elif arm == "W":
-            road_rects.append((0, cy - half_separation - outbound_width, cx, full_width))
+            road_rects.append((0, cy - negative_gap - outbound_width, cx, outbound_width))
+            road_rects.append((0, cy + positive_gap, cx, inbound_width))
     return road_rects
 
 
@@ -297,32 +310,117 @@ def _compute_stop_line(
     """
     cx, cy = center_point
 
-    half_separation = carriageway_separation // 2
-    span = inbound_width + half_separation
+    negative_gap, positive_gap = _split_carriageway_gap(carriageway_separation)
 
     if dy != 0:
         # Vertical traffic (N/S): right is perpendicular on x-axis
         center_point_line = (cx, cy)
+        span = inbound_width + (negative_gap if dy < 0 else positive_gap)
         right_point = (cx - span, cy) if dy < 0 else (cx + span, cy)
     else:
         # Horizontal traffic (E/W): right is perpendicular on y-axis
         center_point_line = (cx, cy)
+        span = inbound_width + (negative_gap if dx > 0 else positive_gap)
         right_point = (cx, cy - span) if dx > 0 else (cx, cy + span)
 
     return (center_point_line, right_point)
 
 
-def derive_carriageway_separation(
+def derive_carriageway_separation_by_arm(
     *,
+    arm_names: Sequence[str],
+    inbound_lane_count_by_arm: Mapping[str, int],
+    straight_capable_lane_indices_by_arm: Mapping[str, Sequence[int]] | None,
     lane_width: int,
-    carriageway_separation: int | None,
+    outbound_lane_count: int,
+    carriageway_separation_override: int | None,
+) -> dict[str, int]:
+    override = _validated_carriageway_separation_override(carriageway_separation_override)
+    straight_indices_by_arm = straight_capable_lane_indices_by_arm or {}
+
+    derived_by_arm: dict[str, int] = {}
+    for arm in arm_names:
+        opposite_arm = _opposite_arm_name(arm)
+        if opposite_arm is None or opposite_arm not in inbound_lane_count_by_arm:
+            derived_by_arm[arm] = override
+            continue
+
+        inbound_lane_count = inbound_lane_count_by_arm[opposite_arm]
+        straight_indices = tuple(straight_indices_by_arm.get(opposite_arm, ()))
+        _validate_straight_lane_indices(
+            arm=opposite_arm,
+            inbound_lane_count=inbound_lane_count,
+            straight_lane_indices=straight_indices,
+        )
+        auto_baseline = _auto_carriageway_separation_for_arm(
+            straight_lane_indices=straight_indices,
+            lane_width=lane_width,
+            outbound_lane_count=outbound_lane_count,
+        )
+        derived_by_arm[arm] = auto_baseline + override
+    return derived_by_arm
+
+
+def _auto_carriageway_separation_for_arm(
+    *,
+    straight_lane_indices: Sequence[int],
+    lane_width: int,
+    outbound_lane_count: int,
 ) -> int:
-    _ = lane_width
-    if carriageway_separation is None:
+    if not straight_lane_indices:
         return 0
-    if carriageway_separation < 0:
+
+    inbound_centroid = sum(index + 0.5 for index in straight_lane_indices) / len(
+        straight_lane_indices
+    )
+    outbound_centroid = outbound_lane_count / 2.0
+    required = 2.0 * lane_width * (inbound_centroid - outbound_centroid)
+    return max(0, int(ceil(required)))
+
+
+def _opposite_arm_name(arm: str) -> str | None:
+    if arm == "N":
+        return "S"
+    if arm == "S":
+        return "N"
+    if arm == "E":
+        return "W"
+    if arm == "W":
+        return "E"
+    return None
+
+
+def _validated_carriageway_separation_override(
+    carriageway_separation_override: int | None,
+) -> int:
+    if carriageway_separation_override is None:
+        return 0
+    if carriageway_separation_override < 0:
         raise ValueError("carriageway_separation must be >= 0")
-    return carriageway_separation
+    return carriageway_separation_override
+
+
+def _validate_straight_lane_indices(
+    *,
+    arm: str,
+    inbound_lane_count: int,
+    straight_lane_indices: Sequence[int],
+) -> None:
+    seen: set[int] = set()
+    for lane_index in straight_lane_indices:
+        if lane_index in seen:
+            raise ValueError(f"duplicate straight-capable lane index for arm {arm}: {lane_index}")
+        seen.add(lane_index)
+        if lane_index < 0 or lane_index >= inbound_lane_count:
+            raise ValueError(
+                f"straight-capable lane index out of range for arm {arm}: {lane_index}"
+            )
+
+
+def _split_carriageway_gap(carriageway_separation: int) -> tuple[int, int]:
+    negative_side_gap = carriageway_separation // 2
+    positive_side_gap = carriageway_separation - negative_side_gap
+    return (negative_side_gap, positive_side_gap)
 
 
 def compute_road_width_from_inbound_lanes(

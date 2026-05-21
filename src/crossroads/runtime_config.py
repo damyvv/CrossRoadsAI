@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import yaml
 
@@ -78,6 +78,7 @@ _VALID_ARMS_BY_COUNT = {
 }
 _SUPPORTED_ARM_COUNTS = {4}
 _ALLOWED_LANE_MOVEMENTS = {"left", "straight", "right"}
+_LANE_MOVEMENT_ORDER = {"left": 0, "straight": 1, "right": 2}
 
 _NESTED_SECTIONS = {
     "window": {
@@ -492,6 +493,15 @@ def _parse_inbound_lanes(
                     f"duplicate movements in intersection.inbound_lanes[{arm}][{lane_index}]: {duplicate_movements!r}"
                 )
 
+            unique_movements = tuple(parsed_movements)
+            canonical_movements = tuple(
+                sorted(unique_movements, key=lambda movement: _LANE_MOVEMENT_ORDER[movement])
+            )
+            if unique_movements != canonical_movements:
+                raise ValueError(
+                    f"intersection.inbound_lanes[{arm}][{lane_index}].movements must follow canonical order ['left', 'straight', 'right']"
+                )
+
             parsed_movement_probabilities: dict[str, float] | None = None
             if "movement_probabilities" in lane_item:
                 probabilities = lane_item["movement_probabilities"]
@@ -517,7 +527,6 @@ def _parse_inbound_lanes(
                         )
                     parsed_movement_probabilities[movement] = parsed_probability
 
-            unique_movements = tuple(parsed_movements)
             if len(unique_movements) > 1 and parsed_movement_probabilities is None:
                 raise ValueError("shared lane movements require explicit movement_probabilities")
             if parsed_movement_probabilities is not None:
@@ -540,6 +549,7 @@ def _parse_inbound_lanes(
                 )
             )
 
+        _validate_lane_order_for_arm(arm=arm, lanes=parsed_lanes)
         parsed[arm] = tuple(parsed_lanes)
 
     missing_arms = sorted(valid_arms - set(parsed.keys()))
@@ -549,6 +559,19 @@ def _parse_inbound_lanes(
         )
 
     return parsed
+
+
+def _validate_lane_order_for_arm(
+    *, arm: str, lanes: Sequence[InboundLaneConfig]
+) -> None:
+    previous_rank: tuple[int, ...] | None = None
+    for lane_index, lane in enumerate(lanes):
+        rank = tuple(_LANE_MOVEMENT_ORDER[movement] for movement in lane.movements)
+        if previous_rank is not None and rank < previous_rank:
+            raise ValueError(
+                f"intersection.inbound_lanes[{arm}] must be ordered left-to-right by movement priority"
+            )
+        previous_rank = rank
 
 
 def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:

@@ -236,7 +236,7 @@ def test_build_intersection_geometry_rejects_negative_carriageway_separation():
             road_width_by_arm={"N": 84, "E": 48, "S": 60, "W": 48},
             inbound_lane_count_by_arm={"N": 5, "E": 2, "S": 3, "W": 2},
             lane_width=12,
-            carriageway_separation=-1,
+            carriageway_separation_override=-1,
             outbound_lane_count=2,
             stop_line_distance=STOP_LINE_DISTANCE,
         )
@@ -252,7 +252,7 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
         road_width_by_arm={"N": 84, "E": 48, "S": 60, "W": 48},
         inbound_lane_count_by_arm={"N": 5, "E": 2, "S": 3, "W": 2},
         lane_width=lane_width,
-        carriageway_separation=carriageway_separation,
+        carriageway_separation_override=carriageway_separation,
         outbound_lane_count=2,
         stop_line_distance=STOP_LINE_DISTANCE,
     )
@@ -271,3 +271,78 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
         (cx, cy + STOP_LINE_DISTANCE),
         (cx + expected_south_offset, cy + STOP_LINE_DISTANCE),
     )
+
+
+def test_build_intersection_geometry_auto_separation_is_per_arm_and_adds_override():
+    lane_width = 12
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 72, "E": 48, "S": 72, "W": 48},
+        inbound_lane_count_by_arm={"N": 4, "E": 2, "S": 4, "W": 2},
+        straight_capable_lane_indices_by_arm={
+            "N": (0, 1),
+            "E": (0, 1),
+            "S": (2, 3),
+            "W": (0, 1),
+        },
+        lane_width=lane_width,
+        carriageway_separation_override=4,
+        outbound_lane_count=2,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    # N baseline is driven by S straight lanes, S by N straight lanes.
+    assert by_arm["N"].carriageway_separation == 52
+    assert by_arm["S"].carriageway_separation == 4
+    assert by_arm["E"].carriageway_separation == 4
+    assert by_arm["W"].carriageway_separation == 4
+
+
+def test_build_intersection_geometry_skips_auto_alignment_when_no_straight_lanes():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 72, "E": 48, "S": 72, "W": 48},
+        inbound_lane_count_by_arm={"N": 4, "E": 2, "S": 4, "W": 2},
+        straight_capable_lane_indices_by_arm={
+            "N": (),
+            "E": (0, 1),
+            "S": (),
+            "W": (0, 1),
+        },
+        lane_width=12,
+        carriageway_separation_override=0,
+        outbound_lane_count=2,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    assert by_arm["N"].carriageway_separation == 0
+    assert by_arm["S"].carriageway_separation == 0
+
+
+def test_build_intersection_geometry_removes_centerline_only_for_separated_arms():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 72, "E": 48, "S": 72, "W": 48},
+        inbound_lane_count_by_arm={"N": 4, "E": 2, "S": 4, "W": 2},
+        straight_capable_lane_indices_by_arm={
+            "N": (0, 1),
+            "E": (0, 1),
+            "S": (2, 3),
+            "W": (0, 1),
+        },
+        lane_width=12,
+        carriageway_separation_override=0,
+        outbound_lane_count=2,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    # Only N has positive separation in this setup.
+    assert len(geometry.arm_center_lines) == 3

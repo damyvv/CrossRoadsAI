@@ -998,3 +998,101 @@ def test_load_shared_lane_with_explicit_movement_probabilities(tmp_path):
     shared_lane = runtime_config.inbound_lanes_by_arm["N"][0]
     assert shared_lane.movements == ("straight", "right")
     assert shared_lane.movement_probabilities == {"straight": 0.75, "right": 0.25}
+
+
+def test_reject_non_canonical_movement_tuple_order(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "  inbound_lanes:",
+                "    N:",
+                "      - movements: [right, straight]",
+                "        movement_probabilities:",
+                "          straight: 0.5",
+                "          right: 0.5",
+                "    E:",
+                "      - movements: [straight]",
+                "    S:",
+                "      - movements: [straight]",
+                "    W:",
+                "      - movements: [straight]",
+                "road:",
+                "  lane_width: 12",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must follow canonical order",
+    ):
+        load_runtime_config(config_path)
+
+
+def test_reject_inbound_lane_order_that_breaks_left_to_right_priority(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "  inbound_lanes:",
+                "    N:",
+                "      - movements: [straight]",
+                "      - movements: [left]",
+                "    E:",
+                "      - movements: [straight]",
+                "    S:",
+                "      - movements: [straight]",
+                "    W:",
+                "      - movements: [straight]",
+                "road:",
+                "  lane_width: 12",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be ordered left-to-right by movement priority",
+    ):
+        load_runtime_config(config_path)
