@@ -51,6 +51,10 @@ def precompute_lane_paths(
                 if movement not in _VALID_MOVEMENTS:
                     raise ValueError(f"unsupported movement for arm {source_arm!r}: {movement!r}")
                 target_arm = _target_arm(source_arm=source_arm, movement=movement)
+                if target_arm not in arms_by_name:
+                    raise ValueError(
+                        f"movement {movement!r} from arm {source_arm!r} targets missing arm {target_arm!r} in geometry"
+                    )
                 if target_arm not in outbound_lane_count_by_arm:
                     raise ValueError(f"missing outbound lane count for destination arm {target_arm!r}")
 
@@ -117,7 +121,12 @@ def _path_points(
     arms_by_name: Mapping[str, ArmGeometry],
 ) -> tuple[tuple[float, float], ...]:
     source_arm_geometry = arms_by_name[source_arm]
-    source_stop_distance = _stop_line_distance(arm=source_arm, geometry=source_arm_geometry, center=geometry.center)
+    source_stop_distance = _distance_for_stop_line_world_coordinate(
+        arm=source_arm,
+        stop_line_anchor=source_arm_geometry.stop_line[0],
+        window_width=window_width,
+        window_height=window_height,
+    )
     start = lane_center_world_position(
         arm=source_arm,
         distance=source_stop_distance,
@@ -222,9 +231,10 @@ def _sample_arc(
     start_angle: float,
     end_angle: float,
 ) -> tuple[tuple[float, float], ...]:
-    if end_angle <= start_angle:
-        end_angle += 2.0 * pi
-    step = (end_angle - start_angle) / _TURN_SEGMENTS
+    delta = ((end_angle - start_angle) + pi) % (2.0 * pi) - pi
+    if delta == -pi:
+        delta = pi
+    step = delta / _TURN_SEGMENTS
     return tuple(
         (
             center[0] + radius * cos(start_angle + (step * i)),
@@ -287,6 +297,25 @@ def _stop_line_distance(*, arm: str, geometry: ArmGeometry, center: tuple[int, i
         return float(stop_x - cx)
     if arm == "W":
         return float(cx - stop_x)
+    raise ValueError(f"unknown arm: {arm!r}")
+
+
+def _distance_for_stop_line_world_coordinate(
+    *,
+    arm: str,
+    stop_line_anchor: tuple[int, int],
+    window_width: int,
+    window_height: int,
+) -> float:
+    stop_x, stop_y = stop_line_anchor
+    if arm == "N":
+        return float(stop_y)
+    if arm == "S":
+        return float((window_height - 1) - stop_y)
+    if arm == "E":
+        return float((window_width - 1) - stop_x)
+    if arm == "W":
+        return float(stop_x)
     raise ValueError(f"unknown arm: {arm!r}")
 
 

@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from crossroads.intersection import build_intersection_geometry
 from crossroads.lane_paths import precompute_lane_paths
 
@@ -112,9 +114,16 @@ def test_left_turn_from_north_rightmost_lane_targets_rightmost_outbound_lane():
     start = lane_path.points[0]
     end = lane_path.points[-1]
     assert end[0] > start[0]
+    north_stop_line = next(arm.stop_line for arm in geometry.arms if arm.name == "N")
+    (stop_start_x, stop_start_y), (stop_end_x, stop_end_y) = north_stop_line
+    assert stop_start_y == stop_end_y
+    assert start[1] == float(stop_start_y)
+    assert min(stop_start_x, stop_end_x) <= start[0] <= max(stop_start_x, stop_end_x)
 
     # Quarter-turn radius equals horizontal/vertical offset from start to end.
     assert math.isclose(abs(end[0] - start[0]), abs(end[1] - start[1]), rel_tol=0, abs_tol=1e-9)
+    # N->E left turn should stay in the south-east quadrant from the start point.
+    assert all(point[0] >= start[0] and point[1] >= start[1] for point in lane_path.points[1:])
 
 
 def test_turn_lane_mapping_is_right_aligned_with_leftmost_clamp():
@@ -147,3 +156,30 @@ def test_turn_lane_mapping_is_right_aligned_with_leftmost_clamp():
     assert paths[("N", 2, "left")].target_outbound_lane_index == 1
     assert paths[("N", 1, "left")].target_outbound_lane_index == 0
     assert paths[("N", 0, "left")].target_outbound_lane_index == 0
+
+
+def test_precompute_lane_paths_rejects_movement_target_arm_missing_from_geometry():
+    geometry = build_intersection_geometry(
+        window_width=960,
+        window_height=720,
+        arm_count=2,
+        road_width_by_arm={"N": 48, "S": 48},
+        inbound_lane_count_by_arm={"N": 1, "S": 1},
+        lane_width=12,
+        outbound_lane_count_by_arm={"N": 1, "S": 1},
+        stop_line_distance=80,
+    )
+    inbound_lanes = {
+        "N": (_Lane("left"),),
+        "S": (_Lane("straight"),),
+    }
+
+    with pytest.raises(ValueError, match="targets missing arm"):
+        precompute_lane_paths(
+            geometry=geometry,
+            inbound_lanes_by_arm=inbound_lanes,
+            outbound_lane_count_by_arm={"N": 1, "S": 1},
+            window_width=960,
+            window_height=720,
+            lane_width=12,
+        )
