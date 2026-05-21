@@ -3,6 +3,7 @@ import pytest
 from crossroads.config import ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
 from crossroads.intersection import (
     build_intersection_geometry,
+    compute_road_width_by_arm_from_inbound_lanes,
     compute_road_width_from_inbound_lanes,
 )
 
@@ -156,18 +157,18 @@ def test_compute_road_width_from_inbound_lanes_scales_with_max_lane_count():
         lane_width=12,
     )
 
-    assert road_width == 120
+    assert road_width == 84
 
 
 @pytest.mark.parametrize(
     ("inbound_lanes_by_arm", "lane_width", "expected_road_width"),
     [
-        ({"N": (object(),), "S": (object(),)}, 10, 20),
+        ({"N": (object(),), "S": (object(),)}, 10, 30),
         ({"N": (object(), object()), "E": (object(),), "W": (object(),)}, 9, 36),
         (
             {"N": (object(),), "E": (object(), object(), object()), "S": (object(),)},
             8,
-            48,
+            40,
         ),
     ],
 )
@@ -179,4 +180,48 @@ def test_compute_road_width_from_inbound_lanes_supports_2_3_4_arm_topologies(
             inbound_lanes_by_arm=inbound_lanes_by_arm, lane_width=lane_width
         )
         == expected_road_width
+    )
+
+
+def test_compute_road_width_by_arm_from_inbound_lanes_uses_inbound_plus_outbound():
+    assert compute_road_width_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm={
+            "N": (object(), object(), object()),
+            "E": (object(),),
+        },
+        lane_width=12,
+        outbound_lane_count=2,
+    ) == {
+        "N": 60,
+        "E": 36,
+    }
+
+
+def test_build_intersection_geometry_uses_per_arm_width_and_inbound_stop_line_span():
+    lane_width = 12
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 84, "E": 48, "S": 60, "W": 48},
+        inbound_lane_count_by_arm={"N": 5, "E": 2, "S": 3, "W": 2},
+        lane_width=lane_width,
+        outbound_lane_count=2,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+    north_arm = geometry.arms[0]
+    south_arm = geometry.arms[2]
+    assert north_arm.center_line[1] == (cx, cy - STOP_LINE_DISTANCE)
+    assert south_arm.center_line[1] == (cx, cy + STOP_LINE_DISTANCE)
+    # N inbound is west side, length = 5 lanes * lane_width.
+    assert north_arm.stop_line == (
+        (cx, cy - STOP_LINE_DISTANCE),
+        (cx - (5 * lane_width), cy - STOP_LINE_DISTANCE),
+    )
+    # S inbound is east side, length = 3 lanes * lane_width.
+    assert south_arm.stop_line == (
+        (cx, cy + STOP_LINE_DISTANCE),
+        (cx + (3 * lane_width), cy + STOP_LINE_DISTANCE),
     )

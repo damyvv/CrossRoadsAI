@@ -2,6 +2,7 @@ import pygame
 
 from crossroads.intersection import (
     build_intersection_geometry,
+    compute_road_width_by_arm_from_inbound_lanes,
     compute_road_width_from_inbound_lanes,
 )
 from crossroads.renderer import render
@@ -17,9 +18,29 @@ from crossroads.traffic_light import TrafficLightController
 
 def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None = None) -> None:
     runtime_config = runtime_config or resolve_runtime_config(config_path=None)
-    road_width = compute_road_width_from_inbound_lanes(
+    lane_width = (
+        runtime_config.road_lane_width
+        if runtime_config.road_lane_width is not None
+        else runtime_config.vehicle_width
+    )
+    outbound_lane_count = 2
+    road_width_by_arm = (
+        compute_road_width_by_arm_from_inbound_lanes(
+            inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm,
+            lane_width=lane_width,
+            outbound_lane_count=outbound_lane_count,
+        )
+        if runtime_config.road_lane_width is not None
+        else {
+            arm: runtime_config.road_width
+            for arm in runtime_config.inbound_lanes_by_arm
+            if runtime_config.road_width is not None
+        }
+    )
+    road_width = max(road_width_by_arm.values()) if road_width_by_arm else compute_road_width_from_inbound_lanes(
         inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm,
-        lane_width=runtime_config.vehicle_width,
+        lane_width=lane_width,
+        outbound_lane_count=outbound_lane_count,
     )
     pygame.init()
     screen = pygame.display.set_mode(
@@ -33,7 +54,16 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         window_height=runtime_config.window_height,
         arm_count=runtime_config.arm_count,
         missing_arm=runtime_config.missing_arm,
-        road_width=road_width,
+        road_width=runtime_config.road_width,
+        road_width_by_arm=road_width_by_arm,
+        inbound_lane_count_by_arm={
+            arm: len(lanes)
+            for arm, lanes in runtime_config.inbound_lanes_by_arm.items()
+        }
+        if runtime_config.road_lane_width is not None
+        else None,
+        lane_width=lane_width if runtime_config.road_lane_width is not None else None,
+        outbound_lane_count=outbound_lane_count,
         stop_line_distance=runtime_config.stop_line_distance,
     )
 
@@ -96,6 +126,7 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
             world_window_width=runtime_config.window_width,
             world_window_height=runtime_config.window_height,
             road_width=road_width,
+            lane_width=lane_width,
             vehicle_length=runtime_config.vehicle_length,
             vehicle_width=runtime_config.vehicle_width,
         )

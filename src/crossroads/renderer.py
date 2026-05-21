@@ -204,6 +204,7 @@ def render(
     world_window_width: int = WINDOW_WIDTH,
     world_window_height: int = WINDOW_HEIGHT,
     road_width: int = ROAD_WIDTH,
+    lane_width: int = VEHICLE_WIDTH,
     vehicle_length: int = VEHICLE_LENGTH,
     vehicle_width: int = VEHICLE_WIDTH,
 ) -> None:
@@ -278,7 +279,7 @@ def render(
             world_window_width=world_window_width,
             world_window_height=world_window_height,
             road_width=road_width,
-            lane_width=vehicle_width,
+            lane_width=lane_width,
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
         )
@@ -292,7 +293,7 @@ def render(
         world_window_width=world_window_width,
         world_window_height=world_window_height,
         road_width=road_width,
-        lane_width=vehicle_width,
+        lane_width=lane_width,
     )
 
     # Draw HUD metrics
