@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -38,6 +39,7 @@ class RuntimeConfig:
 @dataclass(frozen=True)
 class InboundLaneConfig:
     movements: tuple[str, ...]
+    movement_probabilities: dict[str, float] | None = None
 
 
 _REQUIRED_KEYS = {
@@ -420,7 +422,7 @@ def _parse_inbound_lanes(
                     f"intersection.inbound_lanes[{arm}][{lane_index}] must be a mapping"
                 )
 
-            allowed_lane_keys = {"movements"}
+            allowed_lane_keys = {"movements", "movement_probabilities"}
             unknown_lane_keys = sorted(set(lane_item.keys()) - allowed_lane_keys)
             if unknown_lane_keys:
                 raise ValueError(
@@ -463,7 +465,53 @@ def _parse_inbound_lanes(
                     f"duplicate movements in intersection.inbound_lanes[{arm}][{lane_index}]: {duplicate_movements!r}"
                 )
 
-            parsed_lanes.append(InboundLaneConfig(movements=tuple(parsed_movements)))
+            parsed_movement_probabilities: dict[str, float] | None = None
+            if "movement_probabilities" in lane_item:
+                probabilities = lane_item["movement_probabilities"]
+                if not isinstance(probabilities, dict):
+                    raise ValueError(
+                        f"intersection.inbound_lanes[{arm}][{lane_index}].movement_probabilities must be a mapping"
+                    )
+
+                parsed_movement_probabilities = {}
+                for movement, probability in probabilities.items():
+                    if not isinstance(movement, str):
+                        raise ValueError(
+                            f"intersection.inbound_lanes[{arm}][{lane_index}].movement_probabilities keys must be strings"
+                        )
+                    if isinstance(probability, bool) or not isinstance(probability, (int, float)):
+                        raise ValueError(
+                            f"intersection.inbound_lanes[{arm}][{lane_index}].movement_probabilities[{movement}] must be a non-negative finite number"
+                        )
+                    parsed_probability = float(probability)
+                    if not isfinite(parsed_probability) or parsed_probability < 0.0:
+                        raise ValueError(
+                            f"intersection.inbound_lanes[{arm}][{lane_index}].movement_probabilities[{movement}] must be a non-negative finite number"
+                        )
+                    parsed_movement_probabilities[movement] = parsed_probability
+
+            unique_movements = tuple(parsed_movements)
+            if len(unique_movements) > 1:
+                if parsed_movement_probabilities is None:
+                    raise ValueError("shared lane movements require explicit movement_probabilities")
+                expected_keys = set(unique_movements)
+                actual_keys = set(parsed_movement_probabilities)
+                if actual_keys != expected_keys:
+                    raise ValueError(
+                        f"intersection.inbound_lanes[{arm}][{lane_index}].movement_probabilities keys must match movements exactly"
+                    )
+                total_probability = sum(parsed_movement_probabilities[movement] for movement in unique_movements)
+                if abs(total_probability - 1.0) > 1e-9:
+                    raise ValueError(
+                        f"intersection.inbound_lanes[{arm}][{lane_index}].movement_probabilities must sum to 1.0"
+                    )
+
+            parsed_lanes.append(
+                InboundLaneConfig(
+                    movements=unique_movements,
+                    movement_probabilities=parsed_movement_probabilities,
+                )
+            )
 
         parsed[arm] = tuple(parsed_lanes)
 

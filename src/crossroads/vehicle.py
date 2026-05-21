@@ -30,6 +30,8 @@ class Vehicle:
     max_velocity: float
     acceleration: float
     deceleration: float
+    lane_index: int = 0
+    committed_movement: str = "straight"
     position: float = 0.0
     velocity: float = 0.0
     state: VehicleState = field(default=VehicleState.APPROACHING, init=False)
@@ -37,6 +39,10 @@ class Vehicle:
     _cruise_velocity: float = field(default=0.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        if self.lane_index < 0:
+            raise ValueError("lane_index must be non-negative")
+        if self.committed_movement not in {"left", "straight", "right"}:
+            raise ValueError("committed_movement must be one of: left, straight, right")
         if self.crossing_distance < 0 or self.exit_distance < 0 or self.discard_distance < 0:
             raise ValueError("distance thresholds must be non-negative")
         if not (self.crossing_distance < self.exit_distance < self.discard_distance):

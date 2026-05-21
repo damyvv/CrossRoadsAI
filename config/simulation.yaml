@@ -13,12 +13,28 @@ intersection:
       - movements: [right]
     E:
       - movements: [straight, left]
+        movement_probabilities:
+          straight: 0.5
+          left: 0.5
       - movements: [straight, right]
+        movement_probabilities:
+          straight: 0.5
+          right: 0.5
     S:
       - movements: [left, right, straight]
+        movement_probabilities:
+          left: 0.34
+          right: 0.33
+          straight: 0.33
     W:
       - movements: [straight, left]
+        movement_probabilities:
+          straight: 0.5
+          left: 0.5
       - movements: [straight, right]
+        movement_probabilities:
+          straight: 0.5
+          right: 0.5
 
 road:
   width: 120

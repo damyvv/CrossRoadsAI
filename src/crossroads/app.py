@@ -3,7 +3,12 @@ import pygame
 from crossroads.intersection import build_intersection_geometry
 from crossroads.renderer import render
 from crossroads.runtime_config import RuntimeConfig, resolve_runtime_config
-from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
+from crossroads.simulation import (
+    InboundLaneSpawnConfig,
+    IntersectionSimulation,
+    TrafficSpawnConfig,
+    VehicleFlowConfig,
+)
 from crossroads.traffic_light import TrafficLightController
 
 
@@ -51,6 +56,16 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
             lambda_per_second_by_arm=runtime_config.vehicle_spawn_rate_per_second_by_arm,
             ticks_per_second=runtime_config.simulation_ticks_per_second,
             seed=runtime_config.vehicle_spawn_seed,
+            inbound_lanes_by_arm={
+                arm: tuple(
+                    InboundLaneSpawnConfig(
+                        movements=lane.movements,
+                        movement_probabilities=lane.movement_probabilities,
+                    )
+                    for lane in lanes
+                )
+                for arm, lanes in runtime_config.inbound_lanes_by_arm.items()
+            },
         ),
     )
 
