@@ -4,6 +4,21 @@ window:
 
 intersection:
   arm_count: 4
+  inbound_lanes:
+    N:
+      - movements: [left]
+      - movements: [left]
+      - movements: [straight]
+      - movements: [straight]
+      - movements: [right]
+    E:
+      - movements: [straight, left]
+      - movements: [straight, right]
+    S:
+      - movements: [left, right, straight]
+    W:
+      - movements: [straight, left]
+      - movements: [straight, right]
 
 road:
   width: 120
