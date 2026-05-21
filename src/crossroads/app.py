@@ -5,7 +5,6 @@ from crossroads.renderer import render
 from crossroads.runtime_config import RuntimeConfig, resolve_runtime_config
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
 from crossroads.traffic_light import TrafficLightController
-from crossroads.traffic_phasing import default_four_way_phases
 
 
 def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None = None) -> None:
@@ -21,13 +20,14 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         window_width=runtime_config.window_width,
         window_height=runtime_config.window_height,
         arm_count=runtime_config.arm_count,
+        missing_arm=runtime_config.missing_arm,
         road_width=runtime_config.road_width,
         stop_line_distance=runtime_config.stop_line_distance,
     )
 
     controller = TrafficLightController(
         arm_names=[arm.name for arm in geometry.arms],
-        phases=default_four_way_phases(),
+        phases=list(runtime_config.phases),
         green_ticks=runtime_config.green_duration_ticks,
         yellow_ticks=runtime_config.yellow_duration_ticks,
     )
