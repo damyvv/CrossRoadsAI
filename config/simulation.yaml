@@ -24,3 +24,13 @@ simulation:
   yellow_duration_ticks: 60
   ticks_per_second: 60
   vehicle_spawn_seed: 42
+
+topology:
+  arm_count: 4
+
+phases:
+  - arms: [N, S]
+    name: NS
+  - arms: [E, W]
+    name: EW
+

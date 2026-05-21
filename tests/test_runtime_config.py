@@ -254,3 +254,176 @@ def test_resolve_runtime_config_falls_back_to_legacy_constants(tmp_path):
     assert runtime_config.arm_count == legacy_config.ARM_COUNT
     assert runtime_config.vehicle_spawn_seed == legacy_config.VEHICLE_SPAWN_SEED
 
+
+# ============ TDD tests for #25: Topology and explicit Phase schedule ============
+
+def test_load_topology_4arm_from_yaml(tmp_path):
+    """Parse 4-arm topology without missing_arm."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "topology:",
+                "  arm_count: 4",
+            ]
+        )
+    )
+
+    runtime_config = load_runtime_config(config_path)
+
+    assert runtime_config.arm_count == 4
+    assert runtime_config.missing_arm is None
+
+
+def test_load_topology_3arm_from_yaml_with_missing_arm(tmp_path):
+    """Parse 3-arm topology with missing_arm specified."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 3",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "topology:",
+                "  arm_count: 3",
+                "  missing_arm: N",
+            ]
+        )
+    )
+
+    runtime_config = load_runtime_config(config_path)
+
+    assert runtime_config.arm_count == 3
+    assert runtime_config.missing_arm == "N"
+
+
+def test_load_phases_from_yaml(tmp_path):
+    """Parse explicit phase schedule from YAML."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "topology:",
+                "  arm_count: 4",
+                "phases:",
+                "  - arms: [N, S]",
+                "    name: NS",
+                "  - arms: [E, W]",
+                "    name: EW",
+            ]
+        )
+    )
+
+    runtime_config = load_runtime_config(config_path)
+
+    assert len(runtime_config.phases) == 2
+    assert runtime_config.phases[0].arms == ("N", "S")
+    assert runtime_config.phases[0].name == "NS"
+    assert runtime_config.phases[1].arms == ("E", "W")
+    assert runtime_config.phases[1].name == "EW"
+
+
+def test_reject_phase_with_invalid_arm_for_topology(tmp_path):
+    """Reject phases that include arms not in topology."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 3",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "topology:",
+                "  arm_count: 3",
+                "  missing_arm: N",
+                "phases:",
+                "  - arms: [N, S]",
+                "    name: NS",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="invalid arm .* in phase .* for topology"):
+        load_runtime_config(config_path)
+
