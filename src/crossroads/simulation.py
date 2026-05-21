@@ -185,7 +185,9 @@ def _validate_and_normalize_inbound_lanes_by_arm(
 
             movement_probabilities = lane_config.movement_probabilities
             if len(movements) > 1 and movement_probabilities is None:
-                raise ValueError("shared lane movements require explicit movement_probabilities")
+                raise ValueError(
+                    f"shared lane movements for arm {arm!r} at index {lane_index} require explicit movement_probabilities"
+                )
 
             cumulative_probabilities: tuple[float, ...] | None = None
             if movement_probabilities is not None:
