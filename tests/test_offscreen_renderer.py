@@ -5,23 +5,22 @@ import pytest
 
 import pygame
 
-from crossroads.config import (
-    GREEN_DURATION_TICKS,
-    ROAD_WIDTH,
-    SIMULATION_TICKS_PER_SECOND,
-    STOP_LINE_DISTANCE,
-    VEHICLE_ACCELERATION,
-    VEHICLE_COLOR,
-    VEHICLE_DECELERATION,
-    VEHICLE_LENGTH,
-    VEHICLE_QUEUE_GAP,
-    VEHICLE_STOP_DISTANCE_BEFORE_LINE,
-    VEHICLE_TOP_SPEED,
-    VEHICLE_WIDTH,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-    YELLOW_DURATION_TICKS,
-)
+# Inlined config constants (previously in crossroads.config)
+GREEN_DURATION_TICKS = 150
+ROAD_WIDTH = 120
+SIMULATION_TICKS_PER_SECOND = 60
+STOP_LINE_DISTANCE = 70
+VEHICLE_ACCELERATION = 0.20
+VEHICLE_COLOR = (70, 130, 240)
+VEHICLE_DECELERATION = 0.30
+VEHICLE_LENGTH = 24
+VEHICLE_QUEUE_GAP = 8
+VEHICLE_STOP_DISTANCE_BEFORE_LINE = 10.0
+VEHICLE_TOP_SPEED = 4.0
+VEHICLE_WIDTH = 12
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
+YELLOW_DURATION_TICKS = 60
 from crossroads.intersection import build_intersection_geometry
 from crossroads.renderer import render
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig

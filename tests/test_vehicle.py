@@ -1,10 +1,9 @@
-from crossroads.config import (
-    ROAD_WIDTH,
-    STOP_LINE_DISTANCE,
-    VEHICLE_LENGTH,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-)
+# Inlined config constants (previously in crossroads.config)
+ROAD_WIDTH = 120
+STOP_LINE_DISTANCE = 70
+VEHICLE_LENGTH = 24
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
 from crossroads.vehicle import (
     Vehicle,
     VehicleState,

@@ -1,6 +1,10 @@
 import pytest
 
-from crossroads.config import ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
+# Inlined config constants (previously in crossroads.config)
+ROAD_WIDTH = 120
+STOP_LINE_DISTANCE = 70
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
 from crossroads.intersection import (
     build_intersection_geometry,
     compute_road_width_by_arm_from_inbound_lanes,

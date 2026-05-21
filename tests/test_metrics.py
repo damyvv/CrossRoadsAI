@@ -1,9 +1,8 @@
-from crossroads.config import (
-    STOP_LINE_DISTANCE,
-    VEHICLE_LENGTH,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-)
+# Inlined config constants (previously in crossroads.config)
+STOP_LINE_DISTANCE = 70
+VEHICLE_LENGTH = 24
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
 from crossroads.metrics import MetricsTracker
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
 from crossroads.traffic_light import TrafficLightController

@@ -1,13 +1,12 @@
 import pygame
 
-from crossroads.config import (
-    LIGHT_COLOR_GREEN,
-    LIGHT_COLOR_RED,
-    LIGHT_COLOR_YELLOW,
-    TRAFFIC_LIGHT_RADIUS,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-)
+# Inlined defaults previously provided by src/crossroads/config.py
+LIGHT_COLOR_GREEN = (0, 200, 80)
+LIGHT_COLOR_YELLOW = (255, 200, 0)
+LIGHT_COLOR_RED = (220, 30, 30)
+TRAFFIC_LIGHT_RADIUS = 6
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
 from crossroads.intersection import ArmGeometry
 from crossroads.traffic_light import LightState
 

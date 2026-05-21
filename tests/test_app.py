@@ -1,16 +1,15 @@
-from crossroads.config import (
-    GREEN_DURATION_TICKS,
-    STOP_LINE_DISTANCE,
-    VEHICLE_ACCELERATION,
-    VEHICLE_DECELERATION,
-    VEHICLE_LENGTH,
-    VEHICLE_QUEUE_GAP,
-    VEHICLE_STOP_DISTANCE_BEFORE_LINE,
-    VEHICLE_TOP_SPEED,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-    YELLOW_DURATION_TICKS,
-)
+# Inlined config constants (previously in crossroads.config)
+GREEN_DURATION_TICKS = 150
+STOP_LINE_DISTANCE = 70
+VEHICLE_ACCELERATION = 0.20
+VEHICLE_DECELERATION = 0.30
+VEHICLE_LENGTH = 24
+VEHICLE_QUEUE_GAP = 8
+VEHICLE_STOP_DISTANCE_BEFORE_LINE = 10.0
+VEHICLE_TOP_SPEED = 4.0
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
+YELLOW_DURATION_TICKS = 60
 from crossroads.simulation import _advance_vehicles, _entry_occupied_by_arm
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases

@@ -4,22 +4,23 @@ Can render to any pygame.Surface, including offscreen surfaces for testing.
 """
 import pygame
 
-from crossroads.config import (
-    BACKGROUND_COLOR,
-    CENTER_MARK_COLOR,
-    HUD_BACKGROUND_COLOR,
-    HUD_PADDING,
-    HUD_TEXT_COLOR,
-    ROAD_COLOR,
-    ROAD_WIDTH,
-    STOP_LINE_COLOR,
-    TRAFFIC_LIGHT_RADIUS,
-    VEHICLE_COLOR,
-    VEHICLE_LENGTH,
-    VEHICLE_WIDTH,
-    WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-)
+# Formerly provided by src/crossroads/config.py — inlined here to remove module dependency.
+# These are default values consistent with previous behavior and can be overridden by passing
+# corresponding parameters to the render() function where applicable.
+BACKGROUND_COLOR = (27, 114, 62)
+CENTER_MARK_COLOR = (220, 220, 220)
+HUD_BACKGROUND_COLOR = (50, 50, 50)
+HUD_PADDING = 10
+HUD_TEXT_COLOR = (255, 255, 255)
+ROAD_COLOR = (61, 61, 61)
+ROAD_WIDTH = 120
+STOP_LINE_COLOR = (245, 245, 245)
+TRAFFIC_LIGHT_RADIUS = 6
+VEHICLE_COLOR = (70, 130, 240)
+VEHICLE_LENGTH = 24
+VEHICLE_WIDTH = 12
+WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 960
 from crossroads.intersection import IntersectionGeometry
 from crossroads.simulation import SimulationState
 from crossroads.traffic_light import LightState
