@@ -123,6 +123,7 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
             geometry=geometry,
             state=simulation_state,
             average_wait_time=average_wait_seconds,
+            runtime_config=runtime_config,
             world_window_width=runtime_config.window_width,
             world_window_height=runtime_config.window_height,
             road_width=road_width,

@@ -26,6 +26,36 @@ from crossroads.renderer import render
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
+from crossroads.runtime_config import RuntimeConfig, InboundLaneConfig
+
+
+@pytest.fixture
+def runtime_config():
+    inbound = {arm: (InboundLaneConfig(movements=("straight",)),) for arm in ("N", "E", "S", "W")}
+    return RuntimeConfig(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        missing_arm=None,
+        road_width=ROAD_WIDTH,
+        road_lane_width=None,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        green_duration_ticks=GREEN_DURATION_TICKS,
+        yellow_duration_ticks=YELLOW_DURATION_TICKS,
+        simulation_ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+        vehicle_top_speed=VEHICLE_TOP_SPEED,
+        vehicle_acceleration=VEHICLE_ACCELERATION,
+        vehicle_deceleration=VEHICLE_DECELERATION,
+        vehicle_length=VEHICLE_LENGTH,
+        vehicle_width=VEHICLE_WIDTH,
+        vehicle_queue_gap=VEHICLE_QUEUE_GAP,
+        vehicle_stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        vehicle_spawn_rate_per_second=2.0,
+        vehicle_spawn_rate_per_second_by_arm=None,
+        vehicle_spawn_seed=42,
+        phases=default_four_way_phases(),
+        inbound_lanes_by_arm=inbound,
+    )
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -66,7 +96,7 @@ def test_offscreen_render_without_display():
     )
 
     # Render to offscreen surface
-    render(surface=surface, geometry=geometry, state=state, average_wait_time=1.5)
+    render(surface=surface, geometry=geometry, state=state, average_wait_time=1.5, runtime_config=runtime_config)
 
     # Verify surface was rendered
     assert surface.get_size() == (WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -92,7 +122,7 @@ def test_offscreen_renderer_draws_traffic_lights():
         light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
         vehicles=(),
     )
-    render(surface=surface, geometry=geometry, state=state_green, average_wait_time=0.0)
+    render(surface=surface, geometry=geometry, state=state_green, average_wait_time=0.0, runtime_config=runtime_config)
 
     # Get the N arm stop line center (approximately where green light should be)
     # Since the surface is exactly WINDOW_WIDTH x WINDOW_HEIGHT, the light is drawn at its
@@ -142,6 +172,7 @@ def test_offscreen_renderer_draws_one_signal_head_per_lane():
         geometry=geometry,
         state=state,
         average_wait_time=0.0,
+        runtime_config=runtime_config,
         road_width=road_width,
         vehicle_width=VEHICLE_WIDTH,
         lane_width=lane_width,
@@ -200,7 +231,7 @@ def test_offscreen_renderer_draws_vehicles():
         vehicles=(VehicleSnapshot(arm="N", position=150.0, state=VehicleState.CROSSING, wait_ticks=0),),
     )
 
-    render(surface=surface, geometry=geometry, state=state, average_wait_time=0.0)
+    render(surface=surface, geometry=geometry, state=state, average_wait_time=0.0, runtime_config=runtime_config)
 
     world_x, world_y = lane_center_world_position(
         arm="N",
@@ -215,8 +246,8 @@ def test_offscreen_renderer_draws_vehicles():
     pixel_y = center_y - WINDOW_HEIGHT // 2 + int(world_y)
 
     pixel = surface.get_at((pixel_x, pixel_y))
-    assert tuple(pixel[:3]) == VEHICLE_COLOR, (
-        f"Expected vehicle color {VEHICLE_COLOR} at ({pixel_x}, {pixel_y}), got {tuple(pixel[:3])}"
+    assert tuple(pixel[:3]) == runtime_config.vehicle_color, (
+        f"Expected vehicle color {runtime_config.vehicle_color} at ({pixel_x}, {pixel_y}), got {tuple(pixel[:3])}"
     )
 
 

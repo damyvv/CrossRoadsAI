@@ -4,37 +4,14 @@ Can render to any pygame.Surface, including offscreen surfaces for testing.
 """
 import pygame
 
-# Formerly provided by src/crossroads/config.py — inlined here to remove module dependency.
-# These are default values consistent with previous behavior and can be overridden by passing
-# corresponding parameters to the render() function where applicable.
-BACKGROUND_COLOR = (27, 114, 62)
-CENTER_MARK_COLOR = (220, 220, 220)
-HUD_BACKGROUND_COLOR = (50, 50, 50)
-HUD_PADDING = 10
-HUD_TEXT_COLOR = (255, 255, 255)
-ROAD_COLOR = (61, 61, 61)
-ROAD_WIDTH = 120
-STOP_LINE_COLOR = (245, 245, 245)
-TRAFFIC_LIGHT_RADIUS = 6
-VEHICLE_COLOR = (70, 130, 240)
-VEHICLE_LENGTH = 24
-VEHICLE_WIDTH = 12
-WINDOW_HEIGHT = 720
-WINDOW_WIDTH = 960
+from crossroads.runtime_config import RuntimeConfig
 from crossroads.intersection import IntersectionGeometry
 from crossroads.simulation import SimulationState
 from crossroads.traffic_light import LightState
 from crossroads.vehicle import lane_center_world_position
 
 
-_CENTER_LINE_COLOR = (200, 200, 200)
 _CENTER_LINE_DASH_PATTERN = [4, 4]
-
-_LIGHT_COLORS = {
-    LightState.GREEN: (0, 255, 0),
-    LightState.YELLOW: (255, 255, 0),
-    LightState.RED: (255, 0, 0),
-}
 
 
 def _draw_dashed_line(
@@ -93,6 +70,7 @@ def _draw_vehicle(
     lane_width: int,
     vehicle_length: int,
     vehicle_width: int,
+    runtime_config: RuntimeConfig,
 ) -> None:
     """Draw a vehicle on the surface."""
     world_x, world_y = lane_center_world_position(
@@ -122,29 +100,29 @@ def _draw_vehicle(
             vehicle_length,
             vehicle_width,
         )
-    pygame.draw.rect(surface, VEHICLE_COLOR, rect)
+    pygame.draw.rect(surface, runtime_config.vehicle_color, rect)
 
 
 def _draw_hud_metrics(
-    surface: pygame.Surface, average_wait_time: float, screen_width: int, screen_height: int
+    surface: pygame.Surface, average_wait_time: float, screen_width: int, screen_height: int, runtime_config: RuntimeConfig
 ) -> None:
     """Draw a HUD overlay showing metrics in the top-right corner of the screen."""
     font = pygame.font.Font(None, 24)
-    text_surface = font.render(f"Avg Wait: {average_wait_time:.2f}s", True, HUD_TEXT_COLOR)
+    text_surface = font.render(f"Avg Wait: {average_wait_time:.2f}s", True, runtime_config.hud_text_color)
 
     text_width = text_surface.get_width()
     text_height = text_surface.get_height()
 
     bg_rect = pygame.Rect(
-        screen_width - text_width - 2 * HUD_PADDING,
-        HUD_PADDING,
-        text_width + 2 * HUD_PADDING,
-        text_height + 2 * HUD_PADDING,
+        screen_width - text_width - 2 * runtime_config.hud_padding,
+        runtime_config.hud_padding,
+        text_width + 2 * runtime_config.hud_padding,
+        text_height + 2 * runtime_config.hud_padding,
     )
-    text_x = bg_rect.left + HUD_PADDING
-    text_y = bg_rect.top + HUD_PADDING
+    text_x = bg_rect.left + runtime_config.hud_padding
+    text_y = bg_rect.top + runtime_config.hud_padding
 
-    pygame.draw.rect(surface, HUD_BACKGROUND_COLOR, bg_rect)
+    pygame.draw.rect(surface, runtime_config.hud_background_color, bg_rect)
     surface.blit(text_surface, (text_x, text_y))
 
 
@@ -159,13 +137,19 @@ def _draw_lane_signals(
     world_window_height: int,
     road_width: int,
     lane_width: int,
+    runtime_config: RuntimeConfig,
 ) -> None:
+    _light_colors = {
+        LightState.GREEN: runtime_config.light_color_green,
+        LightState.YELLOW: runtime_config.light_color_yellow,
+        LightState.RED: runtime_config.light_color_red,
+    }
     for arm in geometry.arms:
         lane_count = state.lane_counts_by_arm.get(arm.name, 1)
         lane_signal_states = state.lane_light_states
         for lane_index in range(lane_count):
             lane_state = lane_signal_states.get((arm.name, lane_index), state.light_states[arm.name])
-            color = _LIGHT_COLORS[lane_state]
+            color = _light_colors[lane_state]
             if arm.name in ("N", "S"):
                 signal_x, _ = lane_center_world_position(
                     arm=arm.name,
@@ -193,7 +177,7 @@ def _draw_lane_signals(
 
             adj_x = int(center_x - world_window_width // 2 + signal_x)
             adj_y = int(center_y - world_window_height // 2 + signal_y)
-            pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
+            pygame.draw.circle(surface, color, (adj_x, adj_y), runtime_config.traffic_light_radius)
 
 
 def render(
@@ -201,13 +185,14 @@ def render(
     geometry: IntersectionGeometry,
     state: SimulationState,
     average_wait_time: float,
+    runtime_config: RuntimeConfig,
     *,
-    world_window_width: int = WINDOW_WIDTH,
-    world_window_height: int = WINDOW_HEIGHT,
-    road_width: int = ROAD_WIDTH,
-    lane_width: int = VEHICLE_WIDTH,
-    vehicle_length: int = VEHICLE_LENGTH,
-    vehicle_width: int = VEHICLE_WIDTH,
+    world_window_width: int | None = None,
+    world_window_height: int | None = None,
+    road_width: int | None = None,
+    lane_width: int | None = None,
+    vehicle_length: int | None = None,
+    vehicle_width: int | None = None,
 ) -> None:
     """
     Render the intersection simulation to a pygame surface.
@@ -222,7 +207,8 @@ def render(
     center_x = current_width // 2
     center_y = current_height // 2
 
-    surface.fill(BACKGROUND_COLOR)
+    bg_color = runtime_config.background_color
+    surface.fill(bg_color)
 
     # Draw roads
     for rect in geometry.road_rects:
@@ -232,7 +218,7 @@ def render(
             rect[2],
             rect[3],
         )
-        pygame.draw.rect(surface, ROAD_COLOR, adjusted_rect)
+        pygame.draw.rect(surface, runtime_config.road_color, adjusted_rect)
 
     # Draw stop lines
     for arm in geometry.arms:
@@ -245,7 +231,7 @@ def render(
             center_x - world_window_width // 2 + end[0],
             center_y - world_window_height // 2 + end[1],
         )
-        pygame.draw.line(surface, STOP_LINE_COLOR, adjusted_start, adjusted_end, width=3)
+        pygame.draw.line(surface, runtime_config.stop_line_color, adjusted_start, adjusted_end, width=3)
 
     # Draw center lines
     for center_line in geometry.arm_center_lines:
@@ -259,12 +245,12 @@ def render(
             center_y - world_window_height // 2 + end[1],
         )
         _draw_dashed_line(
-            surface, _CENTER_LINE_COLOR, adjusted_start, adjusted_end, width=2, dash_pattern=_CENTER_LINE_DASH_PATTERN
+            surface, runtime_config.center_line_color, adjusted_start, adjusted_end, width=2, dash_pattern=_CENTER_LINE_DASH_PATTERN
         )
 
     # Draw center mark
     adjusted_center = (center_x, center_y)
-    pygame.draw.circle(surface, CENTER_MARK_COLOR, adjusted_center, 4)
+    pygame.draw.circle(surface, runtime_config.center_mark_color, adjusted_center, 4)
 
     # Draw vehicles
     for vehicle in state.vehicles:
@@ -283,6 +269,7 @@ def render(
             lane_width=lane_width,
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
+            runtime_config=runtime_config,
         )
 
     _draw_lane_signals(
@@ -295,6 +282,7 @@ def render(
         world_window_height=world_window_height,
         road_width=road_width,
         lane_width=lane_width,
+        runtime_config=runtime_config,
     )
 
     # Draw HUD metrics
@@ -303,4 +291,5 @@ def render(
         average_wait_time=average_wait_time,
         screen_width=current_width,
         screen_height=current_height,
+        runtime_config=runtime_config,
     )

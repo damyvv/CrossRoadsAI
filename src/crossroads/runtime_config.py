@@ -35,6 +35,21 @@ class RuntimeConfig:
     phases: tuple[ArmPhase, ...]
     inbound_lanes_by_arm: dict[str, tuple["InboundLaneConfig", ...]]
 
+    # Rendering / presentation defaults (optional — can be provided via YAML)
+    background_color: tuple[int, int, int] = (27, 114, 62)
+    center_mark_color: tuple[int, int, int] = (220, 220, 220)
+    center_line_color: tuple[int, int, int] = (200, 200, 200)
+    hud_background_color: tuple[int, int, int] = (50, 50, 50)
+    hud_padding: int = 10
+    hud_text_color: tuple[int, int, int] = (255, 255, 255)
+    road_color: tuple[int, int, int] = (61, 61, 61)
+    stop_line_color: tuple[int, int, int] = (245, 245, 245)
+    light_color_green: tuple[int, int, int] = (0, 200, 80)
+    light_color_yellow: tuple[int, int, int] = (255, 200, 0)
+    light_color_red: tuple[int, int, int] = (220, 30, 30)
+    traffic_light_radius: int = 6
+    vehicle_color: tuple[int, int, int] = (70, 130, 240)
+
 
 @dataclass(frozen=True)
 class InboundLaneConfig:

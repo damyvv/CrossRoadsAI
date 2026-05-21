@@ -1,20 +1,8 @@
 import pygame
 
-# Inlined defaults previously provided by src/crossroads/config.py
-LIGHT_COLOR_GREEN = (0, 200, 80)
-LIGHT_COLOR_YELLOW = (255, 200, 0)
-LIGHT_COLOR_RED = (220, 30, 30)
-TRAFFIC_LIGHT_RADIUS = 6
-WINDOW_HEIGHT = 720
-WINDOW_WIDTH = 960
 from crossroads.intersection import ArmGeometry
 from crossroads.traffic_light import LightState
-
-_LIGHT_COLORS = {
-    LightState.GREEN: LIGHT_COLOR_GREEN,
-    LightState.YELLOW: LIGHT_COLOR_YELLOW,
-    LightState.RED: LIGHT_COLOR_RED,
-}
+from crossroads.runtime_config import RuntimeConfig
 
 
 def draw_traffic_lights(
@@ -24,11 +12,17 @@ def draw_traffic_lights(
     light_states: dict[str, LightState],
     center_x: int,
     center_y: int,
+    runtime_config: RuntimeConfig,
 ) -> None:
+    _light_colors = {
+        LightState.GREEN: runtime_config.light_color_green,
+        LightState.YELLOW: runtime_config.light_color_yellow,
+        LightState.RED: runtime_config.light_color_red,
+    }
     for arm in arms:
         mid_x = (arm.stop_line[0][0] + arm.stop_line[1][0]) // 2
         mid_y = (arm.stop_line[0][1] + arm.stop_line[1][1]) // 2
-        adj_x = center_x - WINDOW_WIDTH // 2 + mid_x
-        adj_y = center_y - WINDOW_HEIGHT // 2 + mid_y
-        color = _LIGHT_COLORS[light_states[arm.name]]
-        pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
+        adj_x = center_x - runtime_config.window_width // 2 + mid_x
+        adj_y = center_y - runtime_config.window_height // 2 + mid_y
+        color = _light_colors[light_states[arm.name]]
+        pygame.draw.circle(surface, color, (adj_x, adj_y), runtime_config.traffic_light_radius)
