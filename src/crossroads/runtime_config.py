@@ -133,8 +133,6 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     # This gives better error messages than the flat validation
     for section, key_mapping in _NESTED_SECTIONS.items():
         if section not in data:
-            # Find a missing key for error message
-            missing_key = next(iter(key_mapping.keys()))
             raise ValueError(f"missing section '{section}' in config; required keys: {', '.join(sorted(key_mapping.keys()))}")
         
         section_data = data[section]
