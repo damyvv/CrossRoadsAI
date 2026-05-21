@@ -10,27 +10,28 @@ intersection:
       - movements: [left]
       - movements: [straight]
       - movements: [straight]
+      - movements: [straight]
       - movements: [right]
     E:
-      - movements: [straight, left]
+      - movements: [left, straight]
         movement_probabilities:
-          straight: 0.5
           left: 0.5
+          straight: 0.5
       - movements: [straight, right]
         movement_probabilities:
           straight: 0.5
           right: 0.5
     S:
-      - movements: [left, right, straight]
+      - movements: [left, straight, right]
         movement_probabilities:
           left: 0.34
-          right: 0.33
           straight: 0.33
+          right: 0.33
     W:
-      - movements: [straight, left]
+      - movements: [left, straight]
         movement_probabilities:
-          straight: 0.5
           left: 0.5
+          straight: 0.5
       - movements: [straight, right]
         movement_probabilities:
           straight: 0.5
@@ -39,6 +40,7 @@ intersection:
 road:
   lane_width: 20
   stop_line_distance: 70
+  # carriageway_separation: 40
 
 vehicle:
   top_speed: 4.0

@@ -12,6 +12,18 @@ _Avoid_: Crossroad, junction
 A directional approach of an Intersection that carries one inbound lane group and one outbound lane group.
 _Avoid_: Approach, road branch
 
+**Clockwise Neighbor Arm**:
+For a four-arm Intersection, the adjacent Arm in canonical clockwise order N → E → S → W.
+_Avoid_: Next arm
+
+**Counterclockwise Neighbor Arm**:
+For a four-arm Intersection, the adjacent Arm in canonical counterclockwise order N → W → S → E.
+_Avoid_: Previous arm
+
+**Opposing Arm**:
+The Arm directly opposite another Arm across the Intersection (N↔S, E↔W in four-arm topology).
+_Avoid_: Facing arm, mirrored arm
+
 **Phase**:
 A coordinated traffic-light window where a specific set of Arms is allowed to proceed.
 _Avoid_: Cycle, stage
@@ -64,6 +76,10 @@ _Avoid_: Verge spacing, median padding
 The allowed movement options for a lane, represented as a non-empty subset of left, straight, and right.
 _Avoid_: Turning mode, lane intent
 
+**Inbound Lane Ordering**:
+The driver-view left-to-right order of Inbound Lanes on an Arm, validated by movement priority left, then straight, then right.
+_Avoid_: Screen-space order, arbitrary lane order
+
 **Signal Group**:
 The set of lanes that share one traffic-light window because their lane movements are mutually conflict-free.
 _Avoid_: Phase lane set, lane batch
@@ -100,6 +116,7 @@ _Avoid_: Cleanup state, delete state
 - A **Phase Handoff** may include a **Clearance Interval** before the next **Signal Group** turns Green
 - Each **Arm** has one **Stop Line**
 - Each **Arm** has an **Inbound Lane** determined by **Driving Side**
+- Each **Arm** defines one **Inbound Lane Ordering**
 - Each **Inbound Lane** has one **Lane Centerline**
 - Each **Inbound Lane** has one **Lane Movement Set**
 - Each **Inbound Lane** belongs to exactly one **Signal Group** per **Phase**
@@ -125,6 +142,7 @@ _Avoid_: Cleanup state, delete state
 - "EXITED" was conflated with "off-screen disappearance" — resolved: **Exit Boundary** is opposite-direction Stop Line crossing, while off-screen disappearance is a separate rendering/lifecycle concern.
 - "verge spacing" was used for geometric lane alignment — resolved: use **Carriageway Separation**.
 - "turning lane" and "shared lane" were overloaded — resolved: define allowed movements as **Lane Movement Set**.
+- "left-to-right lane order" was ambiguous between driver-view and screen-space — resolved: use driver-view **Inbound Lane Ordering**.
 - "traffic light per lane" was interpreted as either independent or coordinated control — resolved: model lanes under coordinated **Signal Groups**.
 - "all-red time" overlapped with yellow semantics — resolved: use **Clearance Interval** for inter-group red-only time.
 - "intent" was used as both configurable options and runtime choice — resolved: use **Lane Movement Set** for options and **Committed Movement** for per-vehicle choice.

@@ -6,6 +6,7 @@ import pytest
 import pygame
 
 from crossroads.config import (
+    BACKGROUND_COLOR,
     GREEN_DURATION_TICKS,
     ROAD_WIDTH,
     SIMULATION_TICKS_PER_SECOND,
@@ -219,6 +220,49 @@ def test_offscreen_renderer_draws_vehicles():
     assert tuple(pixel[:3]) == VEHICLE_COLOR, (
         f"Expected vehicle color {VEHICLE_COLOR} at ({pixel_x}, {pixel_y}), got {tuple(pixel[:3])}"
     )
+
+
+def test_offscreen_renderer_keeps_carriageway_gap_as_background():
+    pygame.init()
+
+    lane_width = 12
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 72, "E": 48, "S": 72, "W": 48},
+        inbound_lane_count_by_arm={"N": 4, "E": 2, "S": 4, "W": 2},
+        straight_capable_lane_indices_by_arm={
+            "N": (0, 1),
+            "E": (0, 1),
+            "S": (2, 3),
+            "W": (0, 1),
+        },
+        lane_width=lane_width,
+        carriageway_separation_override=0,
+        outbound_lane_count=2,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    from crossroads.simulation import SimulationState
+
+    state = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        vehicles=(),
+    )
+    render(
+        surface=surface,
+        geometry=geometry,
+        state=state,
+        average_wait_time=0.0,
+        lane_width=lane_width,
+    )
+
+    cx = WINDOW_WIDTH // 2
+    sample_y = WINDOW_HEIGHT // 4
+    pixel = surface.get_at((cx, sample_y))
+    assert tuple(pixel[:3]) == BACKGROUND_COLOR
 
 
 def test_offscreen_renderer_with_full_simulation():

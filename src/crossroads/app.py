@@ -2,6 +2,7 @@ import pygame
 
 from crossroads.intersection import (
     build_intersection_geometry,
+    compute_outbound_lane_count_by_arm_from_inbound_lanes,
     compute_road_width_by_arm_from_inbound_lanes,
     compute_road_width_from_inbound_lanes,
 )
@@ -23,12 +24,14 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         if runtime_config.road_lane_width is not None
         else runtime_config.vehicle_width
     )
-    outbound_lane_count = 2
+    outbound_lane_count_by_arm = compute_outbound_lane_count_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm
+    )
     road_width_by_arm = (
         compute_road_width_by_arm_from_inbound_lanes(
             inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm,
             lane_width=lane_width,
-            outbound_lane_count=outbound_lane_count,
+            outbound_lane_count_by_arm=outbound_lane_count_by_arm,
         )
         if runtime_config.road_lane_width is not None
         else {
@@ -40,7 +43,7 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
     road_width = max(road_width_by_arm.values()) if road_width_by_arm else compute_road_width_from_inbound_lanes(
         inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm,
         lane_width=lane_width,
-        outbound_lane_count=outbound_lane_count,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
     )
     pygame.init()
     screen = pygame.display.set_mode(
@@ -62,8 +65,19 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         }
         if runtime_config.road_lane_width is not None
         else None,
+        straight_capable_lane_indices_by_arm={
+            arm: tuple(
+                lane_index
+                for lane_index, lane in enumerate(lanes)
+                if "straight" in lane.movements
+            )
+            for arm, lanes in runtime_config.inbound_lanes_by_arm.items()
+        }
+        if runtime_config.road_lane_width is not None
+        else None,
         lane_width=lane_width if runtime_config.road_lane_width is not None else None,
-        outbound_lane_count=outbound_lane_count,
+        carriageway_separation_override=runtime_config.road_carriageway_separation,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
         stop_line_distance=runtime_config.stop_line_distance,
     )
 

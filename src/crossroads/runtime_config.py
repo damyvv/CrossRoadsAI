@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import yaml
 
@@ -19,6 +19,7 @@ class RuntimeConfig:
     missing_arm: str | None
     road_width: int | None
     road_lane_width: int | None
+    road_carriageway_separation: int | None
     stop_line_distance: int
     green_duration_ticks: int
     yellow_duration_ticks: int
@@ -64,6 +65,7 @@ _REQUIRED_KEYS = {
 }
 _OPTIONAL_KEYS = {
     "missing_arm",
+    "road_carriageway_separation",
     "vehicle_spawn_rate_per_second_by_arm",
     "_phases_data",
     "_inbound_lanes_data",
@@ -76,6 +78,7 @@ _VALID_ARMS_BY_COUNT = {
 }
 _SUPPORTED_ARM_COUNTS = {4}
 _ALLOWED_LANE_MOVEMENTS = {"left", "straight", "right"}
+_LANE_MOVEMENT_ORDER = {"left": 0, "straight": 1, "right": 2}
 
 _NESTED_SECTIONS = {
     "window": {
@@ -178,6 +181,8 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
             allowed_nested_keys.add("inbound_lanes")
         if section == "vehicle":
             allowed_nested_keys.add("spawn_rate_per_second_by_arm")
+        if section == "road":
+            allowed_nested_keys.add("carriageway_separation")
         
         unknown_nested_keys = sorted(set(section_data.keys()) - allowed_nested_keys)
         if unknown_nested_keys:
@@ -202,6 +207,10 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     if "vehicle" in data and isinstance(data["vehicle"], dict):
         if "spawn_rate_per_second_by_arm" in data["vehicle"]:
             flat["vehicle_spawn_rate_per_second_by_arm"] = data["vehicle"]["spawn_rate_per_second_by_arm"]
+
+    if "road" in data and isinstance(data["road"], dict):
+        if "carriageway_separation" in data["road"]:
+            flat["road_carriageway_separation"] = data["road"]["carriageway_separation"]
     
     # Handle optional intersection.missing_arm if provided
     if "intersection" in data and isinstance(data["intersection"], dict):
@@ -261,6 +270,24 @@ def _parse_float(
     if minimum is not None and parsed < minimum:
         raise ValueError(f"{key} must be >= {minimum}")
     return parsed
+
+
+def _parse_optional_int(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    minimum: int | None = None,
+) -> int | None:
+    if key not in data:
+        return None
+    value = data[key]
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{key} must be an integer")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{key} must be >= {minimum}")
+    return value
 
 
 def _topology_arms(*, arm_count: int, missing_arm: str | None) -> set[str]:
@@ -466,6 +493,15 @@ def _parse_inbound_lanes(
                     f"duplicate movements in intersection.inbound_lanes[{arm}][{lane_index}]: {duplicate_movements!r}"
                 )
 
+            unique_movements = tuple(parsed_movements)
+            canonical_movements = tuple(
+                sorted(unique_movements, key=lambda movement: _LANE_MOVEMENT_ORDER[movement])
+            )
+            if unique_movements != canonical_movements:
+                raise ValueError(
+                    f"intersection.inbound_lanes[{arm}][{lane_index}].movements must follow canonical order ['left', 'straight', 'right']"
+                )
+
             parsed_movement_probabilities: dict[str, float] | None = None
             if "movement_probabilities" in lane_item:
                 probabilities = lane_item["movement_probabilities"]
@@ -491,7 +527,6 @@ def _parse_inbound_lanes(
                         )
                     parsed_movement_probabilities[movement] = parsed_probability
 
-            unique_movements = tuple(parsed_movements)
             if len(unique_movements) > 1 and parsed_movement_probabilities is None:
                 raise ValueError("shared lane movements require explicit movement_probabilities")
             if parsed_movement_probabilities is not None:
@@ -514,6 +549,7 @@ def _parse_inbound_lanes(
                 )
             )
 
+        _validate_lane_order_for_arm(arm=arm, lanes=parsed_lanes)
         parsed[arm] = tuple(parsed_lanes)
 
     missing_arms = sorted(valid_arms - set(parsed.keys()))
@@ -523,6 +559,19 @@ def _parse_inbound_lanes(
         )
 
     return parsed
+
+
+def _validate_lane_order_for_arm(
+    *, arm: str, lanes: Sequence[InboundLaneConfig]
+) -> None:
+    previous_rank: tuple[int, ...] | None = None
+    for lane_index, lane in enumerate(lanes):
+        rank = tuple(_LANE_MOVEMENT_ORDER[movement] for movement in lane.movements)
+        if previous_rank is not None and rank < previous_rank:
+            raise ValueError(
+                f"intersection.inbound_lanes[{arm}] must be ordered left-to-right by movement priority"
+            )
+        previous_rank = rank
 
 
 def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
@@ -550,6 +599,9 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         missing_arm=missing_arm,
         road_width=None,
         road_lane_width=_parse_int(data, "road_lane_width", minimum=1),
+        road_carriageway_separation=_parse_optional_int(
+            data, "road_carriageway_separation", minimum=0
+        ),
         stop_line_distance=_parse_int(data, "stop_line_distance", minimum=0),
         green_duration_ticks=_parse_int(data, "green_duration_ticks", minimum=1),
         yellow_duration_ticks=_parse_int(data, "yellow_duration_ticks", minimum=1),
@@ -594,6 +646,7 @@ def legacy_runtime_config() -> RuntimeConfig:
         missing_arm=None,
         road_width=legacy_config.ROAD_WIDTH,
         road_lane_width=None,
+        road_carriageway_separation=None,
         stop_line_distance=legacy_config.STOP_LINE_DISTANCE,
         green_duration_ticks=legacy_config.GREEN_DURATION_TICKS,
         yellow_duration_ticks=legacy_config.YELLOW_DURATION_TICKS,

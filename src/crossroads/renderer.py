@@ -90,6 +90,7 @@ def _draw_vehicle(
     world_window_height: int,
     road_width: int,
     lane_width: int,
+    inbound_lane_offset: int,
     vehicle_length: int,
     vehicle_width: int,
 ) -> None:
@@ -103,6 +104,7 @@ def _draw_vehicle(
         lane_index=lane_index,
         lane_count=lane_count,
         lane_width=lane_width,
+        inbound_lane_offset=inbound_lane_offset,
     )
     adj_x = center_x - world_window_width // 2 + world_x
     adj_y = center_y - world_window_height // 2 + world_y
@@ -175,6 +177,7 @@ def _draw_lane_signals(
                     lane_index=lane_index,
                     lane_count=lane_count,
                     lane_width=lane_width,
+                    inbound_lane_offset=arm.inbound_lane_offset,
                 )
                 signal_y = float(arm.stop_line[0][1])
             else:
@@ -187,6 +190,7 @@ def _draw_lane_signals(
                     lane_index=lane_index,
                     lane_count=lane_count,
                     lane_width=lane_width,
+                    inbound_lane_offset=arm.inbound_lane_offset,
                 )
                 signal_x = float(arm.stop_line[0][0])
 
@@ -266,6 +270,9 @@ def render(
     pygame.draw.circle(surface, CENTER_MARK_COLOR, adjusted_center, 4)
 
     # Draw vehicles
+    inbound_lane_offset_by_arm = {
+        arm.name: arm.inbound_lane_offset for arm in geometry.arms
+    }
     for vehicle in state.vehicles:
         lane_count = state.lane_counts_by_arm.get(vehicle.arm, 1)
         _draw_vehicle(
@@ -280,6 +287,7 @@ def render(
             world_window_height=world_window_height,
             road_width=road_width,
             lane_width=lane_width,
+            inbound_lane_offset=inbound_lane_offset_by_arm.get(vehicle.arm, 0),
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
         )
