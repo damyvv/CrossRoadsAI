@@ -3,9 +3,16 @@ import pytest
 from crossroads.config import ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
 from crossroads.intersection import (
     build_intersection_geometry,
+    compute_outbound_lane_count_by_arm_from_inbound_lanes,
     compute_road_width_by_arm_from_inbound_lanes,
     compute_road_width_from_inbound_lanes,
 )
+from crossroads.vehicle import lane_center_world_position
+
+
+class _Lane:
+    def __init__(self, *movements: str) -> None:
+        self.movements = movements
 
 
 def test_build_intersection_geometry_has_four_cardinal_arms():
@@ -197,6 +204,38 @@ def test_compute_road_width_by_arm_from_inbound_lanes_uses_inbound_plus_outbound
     }
 
 
+def test_compute_road_width_by_arm_from_inbound_lanes_supports_per_arm_outbound_lanes():
+    assert compute_road_width_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm={
+            "N": (object(), object(), object()),
+            "E": (object(),),
+        },
+        lane_width=12,
+        outbound_lane_count_by_arm={"N": 4, "E": 2},
+    ) == {
+        "N": 84,
+        "E": 36,
+    }
+
+
+def test_compute_outbound_lane_count_by_arm_from_inbound_lanes_uses_neighbor_movements():
+    outbound_lane_count_by_arm = compute_outbound_lane_count_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm={
+            "N": (_Lane("left"), _Lane("straight"), _Lane("straight")),
+            "E": (_Lane("right"), _Lane("right"), _Lane("right")),
+            "S": (_Lane("straight"), _Lane("straight"), _Lane("left")),
+            "W": (_Lane("left"),),
+        }
+    )
+
+    assert outbound_lane_count_by_arm == {
+        "N": 3,  # max(E right=3, W left=1, S straight=2)
+        "E": 1,  # max(S right=0, N left=1, W straight=0)
+        "S": 2,  # max(W right=0, E left=0, N straight=2)
+        "W": 1,  # max(N right=0, S left=1, E straight=0)
+    }
+
+
 def test_build_intersection_geometry_uses_per_arm_width_and_inbound_stop_line_span():
     lane_width = 12
     geometry = build_intersection_geometry(
@@ -264,11 +303,11 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
     expected_south_offset = (3 * lane_width) + carriageway_separation // 2
 
     assert north_arm.stop_line == (
-        (cx, cy - STOP_LINE_DISTANCE),
+        (cx - carriageway_separation // 2, cy - STOP_LINE_DISTANCE),
         (cx - expected_north_offset, cy - STOP_LINE_DISTANCE),
     )
     assert south_arm.stop_line == (
-        (cx, cy + STOP_LINE_DISTANCE),
+        (cx + carriageway_separation // 2, cy + STOP_LINE_DISTANCE),
         (cx + expected_south_offset, cy + STOP_LINE_DISTANCE),
     )
 
@@ -299,6 +338,91 @@ def test_build_intersection_geometry_auto_separation_is_per_arm_and_adds_overrid
     assert by_arm["S"].carriageway_separation == 4
     assert by_arm["E"].carriageway_separation == 4
     assert by_arm["W"].carriageway_separation == 4
+
+
+def test_build_intersection_geometry_right_aligns_when_outbound_exceeds_opposite_straight():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 96, "E": 48, "S": 72, "W": 48},
+        inbound_lane_count_by_arm={"N": 4, "E": 2, "S": 4, "W": 2},
+        straight_capable_lane_indices_by_arm={
+            "N": (0, 1),
+            "E": (0, 1),
+            "S": (2, 3),
+            "W": (0, 1),
+        },
+        lane_width=12,
+        carriageway_separation_override=0,
+        outbound_lane_count_by_arm={"N": 4, "E": 2, "S": 2, "W": 2},
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    assert by_arm["N"].carriageway_separation == 0
+
+
+@pytest.mark.parametrize("carriageway_separation_override", [0, 40])
+def test_south_straight_lane_aligns_with_north_outbound_rightmost_lane(
+    carriageway_separation_override: int,
+):
+    lane_width = 20
+    inbound_lanes_by_arm = {
+        "N": (
+            _Lane("left"),
+            _Lane("left"),
+            _Lane("straight"),
+            _Lane("straight"),
+            _Lane("straight"),
+            _Lane("right"),
+        ),
+        "E": (_Lane("left", "straight"), _Lane("straight", "right")),
+        "S": (_Lane("left", "straight", "right"),),
+        "W": (_Lane("left", "straight"), _Lane("straight", "right")),
+    }
+    outbound_lane_count_by_arm = compute_outbound_lane_count_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm=inbound_lanes_by_arm
+    )
+    road_width_by_arm = compute_road_width_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm=inbound_lanes_by_arm,
+        lane_width=lane_width,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
+    )
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm=road_width_by_arm,
+        inbound_lane_count_by_arm={arm: len(lanes) for arm, lanes in inbound_lanes_by_arm.items()},
+        straight_capable_lane_indices_by_arm={
+            arm: tuple(i for i, lane in enumerate(lanes) if "straight" in lane.movements)
+            for arm, lanes in inbound_lanes_by_arm.items()
+        },
+        lane_width=lane_width,
+        carriageway_separation_override=carriageway_separation_override,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    south_straight_x, _ = lane_center_world_position(
+        arm="S",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=max(road_width_by_arm.values()),
+        lane_index=0,
+        lane_count=1,
+        lane_width=lane_width,
+        inbound_lane_offset=by_arm["S"].inbound_lane_offset,
+    )
+
+    cx = WINDOW_WIDTH // 2
+    north_neg_gap = by_arm["N"].carriageway_separation // 2
+    north_pos_gap = by_arm["N"].carriageway_separation - north_neg_gap
+    north_outbound_rightmost_x = cx + north_pos_gap + (lane_width / 2.0)
+    assert south_straight_x == north_outbound_rightmost_x
 
 
 def test_build_intersection_geometry_skips_auto_alignment_when_no_straight_lanes():

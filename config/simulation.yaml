@@ -10,6 +10,7 @@ intersection:
       - movements: [left]
       - movements: [straight]
       - movements: [straight]
+      - movements: [straight]
       - movements: [right]
     E:
       - movements: [left, straight]
@@ -39,7 +40,7 @@ intersection:
 road:
   lane_width: 20
   stop_line_distance: 70
-  carriageway_separation: 40
+  # carriageway_separation: 40
 
 vehicle:
   top_speed: 4.0

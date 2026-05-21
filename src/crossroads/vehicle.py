@@ -174,6 +174,7 @@ def lane_center_world_position(
     lane_count: int = 1,
     lane_width: float | None = None,
     carriageway_separation: float = 0.0,
+    inbound_lane_offset: float | None = None,
 ) -> tuple[float, float]:
     if lane_count <= 0:
         raise ValueError("lane_count must be positive")
@@ -185,10 +186,17 @@ def lane_center_world_position(
         raise ValueError("lane_width must be positive")
     if carriageway_separation < 0:
         raise ValueError("carriageway_separation must be non-negative")
+    if inbound_lane_offset is not None and inbound_lane_offset < 0:
+        raise ValueError("inbound_lane_offset must be non-negative")
 
     cx = window_width // 2
     cy = window_height // 2
-    lane_offset = (carriageway_separation / 2.0) + (lane_width * (lane_index + 0.5))
+    base_offset = (
+        carriageway_separation / 2.0
+        if inbound_lane_offset is None
+        else inbound_lane_offset
+    )
+    lane_offset = base_offset + (lane_width * (lane_index + 0.5))
 
     if arm == "N":
         return (float(cx) - lane_offset, distance)

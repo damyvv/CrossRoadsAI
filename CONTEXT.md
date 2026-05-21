@@ -12,6 +12,18 @@ _Avoid_: Crossroad, junction
 A directional approach of an Intersection that carries one inbound lane group and one outbound lane group.
 _Avoid_: Approach, road branch
 
+**Clockwise Neighbor Arm**:
+For a four-arm Intersection, the adjacent Arm in canonical clockwise order N → E → S → W.
+_Avoid_: Next arm
+
+**Counterclockwise Neighbor Arm**:
+For a four-arm Intersection, the adjacent Arm in canonical counterclockwise order N → W → S → E.
+_Avoid_: Previous arm
+
+**Opposing Arm**:
+The Arm directly opposite another Arm across the Intersection (N↔S, E↔W in four-arm topology).
+_Avoid_: Facing arm, mirrored arm
+
 **Phase**:
 A coordinated traffic-light window where a specific set of Arms is allowed to proceed.
 _Avoid_: Cycle, stage
