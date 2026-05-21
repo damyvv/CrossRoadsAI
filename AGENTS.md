@@ -36,7 +36,8 @@ This file is the single source of truth for agent guidance in this repository.
 ### Data flow
 
 ```
-config.py → app.py (window setup)
+config/simulation.yaml → crossroads.runtime_config (load & validate)
+         → app.py (window setup)
          → intersection.py (compute arm positions & roads)
          → traffic_light.py (init controller with phases)
          → each frame: controller.advance_tick() → lights update → pygame renders
@@ -68,7 +69,7 @@ SDL_VIDEODRIVER=dummy ./.venv/bin/python main.py --max-frames 60  # headless smo
 - **Immutability**: Geometry dataclasses use `frozen=True`; intersection is static
 - **Tick-based timing**: All durations in ticks (60 FPS assumed). GREEN_DURATION_TICKS=30 → 0.5s green
 - **Naming**: Compass directions (N/E/S/W); phases by arm pairs (NS, EW)
-- **Constants**: All rendering/timing in `src/crossroads/config.py`; edit there, not in app.py
+- **Constants**: Configuration lives in `config/simulation.yaml` (nested sections); edit there, not in app.py
 
 ## Testing patterns
 

@@ -7,7 +7,6 @@ from typing import Any, Mapping
 
 import yaml
 
-from crossroads import config as legacy_config
 from crossroads.traffic_phasing import ArmPhase, validate_phase_schedule
 
 
@@ -580,42 +579,6 @@ def load_runtime_config(path: Path | str) -> RuntimeConfig:
     return _from_mapping(flattened_data)
 
 
-def legacy_runtime_config() -> RuntimeConfig:
-    if legacy_config.VEHICLE_SPAWN_SEED is None:
-        raise ValueError(
-            "config.py fallback requires VEHICLE_SPAWN_SEED to be set during YAML transition"
-        )
-    if legacy_config.ARM_COUNT not in _SUPPORTED_ARM_COUNTS:
-        raise ValueError("config.py fallback currently supports ARM_COUNT=4 only")
-    return RuntimeConfig(
-        window_width=legacy_config.WINDOW_WIDTH,
-        window_height=legacy_config.WINDOW_HEIGHT,
-        arm_count=legacy_config.ARM_COUNT,
-        missing_arm=None,
-        road_width=legacy_config.ROAD_WIDTH,
-        road_lane_width=None,
-        stop_line_distance=legacy_config.STOP_LINE_DISTANCE,
-        green_duration_ticks=legacy_config.GREEN_DURATION_TICKS,
-        yellow_duration_ticks=legacy_config.YELLOW_DURATION_TICKS,
-        simulation_ticks_per_second=legacy_config.SIMULATION_TICKS_PER_SECOND,
-        vehicle_top_speed=legacy_config.VEHICLE_TOP_SPEED,
-        vehicle_acceleration=legacy_config.VEHICLE_ACCELERATION,
-        vehicle_deceleration=legacy_config.VEHICLE_DECELERATION,
-        vehicle_length=legacy_config.VEHICLE_LENGTH,
-        vehicle_width=legacy_config.VEHICLE_WIDTH,
-        vehicle_queue_gap=legacy_config.VEHICLE_QUEUE_GAP,
-        vehicle_stop_distance_before_line=legacy_config.VEHICLE_STOP_DISTANCE_BEFORE_LINE,
-        vehicle_spawn_rate_per_second=legacy_config.VEHICLE_SPAWN_RATE_PER_SECOND,
-        vehicle_spawn_rate_per_second_by_arm=legacy_config.VEHICLE_SPAWN_RATE_PER_SECOND_BY_ARM,
-        vehicle_spawn_seed=legacy_config.VEHICLE_SPAWN_SEED,
-        phases=(
-            ArmPhase(arms=("N", "S"), name="NS"),
-            ArmPhase(arms=("E", "W"), name="EW"),
-        ),
-        inbound_lanes_by_arm=_default_inbound_lanes_by_arm(
-            arm_count=legacy_config.ARM_COUNT, missing_arm=None
-        ),
-    )
 
 
 def resolve_runtime_config(
@@ -630,4 +593,4 @@ def resolve_runtime_config(
     if yaml_path.exists():
         return load_runtime_config(yaml_path)
 
-    return legacy_runtime_config()
+    raise FileNotFoundError(f"no configuration YAML found: {yaml_path}")

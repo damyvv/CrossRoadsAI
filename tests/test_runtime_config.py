@@ -1,6 +1,5 @@
 import pytest
 
-from crossroads import config as legacy_config
 from crossroads.runtime_config import load_runtime_config, resolve_runtime_config
 
 
@@ -242,17 +241,6 @@ def test_load_runtime_config_reports_missing_key_in_section(tmp_path):
         load_runtime_config(config_path)
 
 
-
-def test_resolve_runtime_config_falls_back_to_legacy_constants(tmp_path):
-    runtime_config = resolve_runtime_config(
-        config_path=None,
-        default_path=tmp_path / "missing-simulation.yaml",
-    )
-
-    assert runtime_config.window_width == legacy_config.WINDOW_WIDTH
-    assert runtime_config.window_height == legacy_config.WINDOW_HEIGHT
-    assert runtime_config.arm_count == legacy_config.ARM_COUNT
-    assert runtime_config.vehicle_spawn_seed == legacy_config.VEHICLE_SPAWN_SEED
 
 
 # ============ TDD tests for #25: Topology and explicit Phase schedule ============
