@@ -145,8 +145,8 @@ def test_load_runtime_config_from_nested_yaml_rejects_unknown_keys_in_section(tm
         load_runtime_config(config_path)
 
 
-def test_load_runtime_config_rejects_mixed_nested_and_flat_format(tmp_path):
-    """Reject flat format - only nested format is supported."""
+def test_load_runtime_config_rejects_flat_format(tmp_path):
+    """Flat format is not supported - only nested format with sections is allowed."""
     config_path = tmp_path / "simulation.yaml"
     config_path.write_text(
         "\n".join(
