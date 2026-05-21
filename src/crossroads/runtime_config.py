@@ -118,6 +118,8 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     To:
       window_width: 960
       window_height: 720
+    
+    Validates that all required nested keys are present with helpful error messages.
     """
     top_level_keys = set(data.keys())
     nested_section_keys = set(_NESTED_SECTIONS.keys())
@@ -127,28 +129,41 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     if unknown_sections:
         raise ValueError(f"unknown key: {unknown_sections[0]}")
     
-    # Flatten each section, validating keys within sections
+    # Validate required keys are present in their sections before flattening
+    # This gives better error messages than the flat validation
+    for section, key_mapping in _NESTED_SECTIONS.items():
+        if section not in data:
+            # Find a missing key for error message
+            missing_key = next(iter(key_mapping.keys()))
+            raise ValueError(f"missing section '{section}' in config; required keys: {', '.join(sorted(key_mapping.keys()))}")
+        
+        section_data = data[section]
+        if not isinstance(section_data, dict):
+            raise ValueError(f"{section} must be a mapping")
+        
+        # Validate no unknown keys within the section
+        # Special case: vehicle section also allows spawn_rate_per_second_by_arm
+        allowed_nested_keys = set(key_mapping.keys())
+        if section == "vehicle":
+            allowed_nested_keys.add("spawn_rate_per_second_by_arm")
+        
+        unknown_nested_keys = sorted(set(section_data.keys()) - allowed_nested_keys)
+        if unknown_nested_keys:
+            raise ValueError(f"unknown key in {section} section: {unknown_nested_keys[0]}")
+        
+        # Validate that required keys within the section are present
+        missing_keys = sorted(set(key_mapping.keys()) - set(section_data.keys()))
+        if missing_keys:
+            raise ValueError(f"missing key '{missing_keys[0]}' in {section} section; required keys: {', '.join(sorted(key_mapping.keys()))}")
+    
+    # Flatten each section
     flat = {}
     for section, key_mapping in _NESTED_SECTIONS.items():
-        if section in data:
-            section_data = data[section]
-            if not isinstance(section_data, dict):
-                raise ValueError(f"{section} must be a mapping")
-            
-            # Validate no unknown keys within the section
-            # Special case: vehicle section also allows spawn_rate_per_second_by_arm
-            allowed_nested_keys = set(key_mapping.keys())
-            if section == "vehicle":
-                allowed_nested_keys.add("spawn_rate_per_second_by_arm")
-            
-            unknown_nested_keys = sorted(set(section_data.keys()) - allowed_nested_keys)
-            if unknown_nested_keys:
-                raise ValueError(f"unknown key in {section} section: {unknown_nested_keys[0]}")
-            
-            # Flatten the section
-            for nested_key, flat_key in key_mapping.items():
-                if nested_key in section_data:
-                    flat[flat_key] = section_data[nested_key]
+        section_data = data[section]
+        # Flatten the section
+        for nested_key, flat_key in key_mapping.items():
+            if nested_key in section_data:
+                flat[flat_key] = section_data[nested_key]
     
     # Handle optional vehicle_spawn_rate_per_second_by_arm if it exists in vehicle section
     if "vehicle" in data and isinstance(data["vehicle"], dict):
