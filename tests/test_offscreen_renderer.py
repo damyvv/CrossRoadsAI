@@ -67,7 +67,7 @@ def init_pygame():
     pygame.quit()
 
 
-def test_offscreen_render_without_display():
+def test_offscreen_render_without_display(runtime_config):
     """Verify that rendering works with offscreen surface without pygame.display."""
     pygame.init()
 
@@ -102,7 +102,7 @@ def test_offscreen_render_without_display():
     assert surface.get_size() == (WINDOW_WIDTH, WINDOW_HEIGHT)
 
 
-def test_offscreen_renderer_draws_traffic_lights():
+def test_offscreen_renderer_draws_traffic_lights(runtime_config):
     """Verify that renderer draws traffic lights with correct colors."""
     pygame.init()
 
@@ -138,7 +138,7 @@ def test_offscreen_renderer_draws_traffic_lights():
     assert pixel[1] > 200, f"Expected green pixel, got {pixel} at ({light_x}, {light_y})"
 
 
-def test_offscreen_renderer_draws_one_signal_head_per_lane():
+def test_offscreen_renderer_draws_one_signal_head_per_lane(runtime_config):
     pygame.init()
 
     lane_width = 12
@@ -208,7 +208,7 @@ def test_offscreen_renderer_draws_one_signal_head_per_lane():
     )
 
 
-def test_offscreen_renderer_draws_vehicles():
+def test_offscreen_renderer_draws_vehicles(runtime_config):
     """Verify that renderer draws vehicles with correct color."""
     pygame.init()
 
@@ -251,7 +251,7 @@ def test_offscreen_renderer_draws_vehicles():
     )
 
 
-def test_offscreen_renderer_with_full_simulation():
+def test_offscreen_renderer_with_full_simulation(runtime_config):
     """Verify renderer works with a full simulation running headlessly."""
     pygame.init()
 
@@ -300,7 +300,7 @@ def test_offscreen_renderer_with_full_simulation():
     for _ in range(10):
         final_state = simulation.state()
         avg_wait = simulation.average_wait_time()
-        render(surface=surface, geometry=geometry, state=final_state, average_wait_time=avg_wait)
+        render(surface=surface, geometry=geometry, state=final_state, average_wait_time=avg_wait, runtime_config=runtime_config)
         simulation.advance_tick()
 
     # Verify simulation produced some state and metrics were tracked
