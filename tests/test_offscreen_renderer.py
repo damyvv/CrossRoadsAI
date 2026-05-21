@@ -17,6 +17,7 @@ from crossroads.config import (
     VEHICLE_QUEUE_GAP,
     VEHICLE_STOP_DISTANCE_BEFORE_LINE,
     VEHICLE_TOP_SPEED,
+    VEHICLE_WIDTH,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     YELLOW_DURATION_TICKS,
@@ -108,6 +109,75 @@ def test_offscreen_renderer_draws_traffic_lights():
     assert pixel[1] > 200, f"Expected green pixel, got {pixel} at ({light_x}, {light_y})"
 
 
+def test_offscreen_renderer_draws_one_signal_head_per_lane():
+    pygame.init()
+
+    lane_width = 12
+    road_width = 48
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=road_width,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    from crossroads.simulation import SimulationState
+    from crossroads.vehicle import lane_center_world_position
+
+    state = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        lane_counts_by_arm={"N": 2, "E": 1, "S": 1, "W": 1},
+        lane_light_states={
+            ("N", 0): LightState.GREEN,
+            ("N", 1): LightState.RED,
+            ("E", 0): LightState.RED,
+            ("S", 0): LightState.GREEN,
+            ("W", 0): LightState.RED,
+        },
+        vehicles=(),
+    )
+    render(
+        surface=surface,
+        geometry=geometry,
+        state=state,
+        average_wait_time=0.0,
+        road_width=road_width,
+        vehicle_width=VEHICLE_WIDTH,
+        lane_width=lane_width,
+    )
+
+    north_stop_line_y = geometry.arms[0].stop_line[0][1]
+    lane_0_x, _ = lane_center_world_position(
+        arm="N",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=road_width,
+        lane_index=0,
+        lane_count=2,
+        lane_width=lane_width,
+    )
+    lane_1_x, _ = lane_center_world_position(
+        arm="N",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=road_width,
+        lane_index=1,
+        lane_count=2,
+        lane_width=lane_width,
+    )
+
+    lane_0_pixel = surface.get_at((int(lane_0_x), north_stop_line_y))
+    lane_1_pixel = surface.get_at((int(lane_1_x), north_stop_line_y))
+    assert lane_0_pixel[1] > 200, f"Expected green lane signal, got {lane_0_pixel}"
+    assert lane_1_pixel[0] > 200 and lane_1_pixel[1] < 100, (
+        f"Expected red lane signal, got {lane_1_pixel}"
+    )
+
+
 def test_offscreen_renderer_draws_vehicles():
     """Verify that renderer draws vehicles with correct color."""
     pygame.init()
@@ -139,6 +209,7 @@ def test_offscreen_renderer_draws_vehicles():
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         road_width=ROAD_WIDTH,
+        lane_width=VEHICLE_WIDTH,
     )
     center_x, center_y = surface.get_width() // 2, surface.get_height() // 2
     pixel_x = center_x - WINDOW_WIDTH // 2 + int(world_x)

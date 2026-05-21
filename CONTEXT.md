@@ -52,6 +52,10 @@ _Avoid_: Approach line, travel strip
 The longitudinal path at the center of a lane used as the canonical movement path for vehicles.
 _Avoid_: Center path, lane track
 
+**Lane Width**:
+The configured width of one lane used to size lane groups and place lane centerlines.
+_Avoid_: Road width, carriageway width
+
 **Carriageway Separation**:
 The median gap between inbound and outbound lane groups on an Arm used to keep opposite lane centerlines straight through the Intersection.
 _Avoid_: Verge spacing, median padding

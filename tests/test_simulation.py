@@ -230,3 +230,21 @@ def test_spawn_does_not_switch_to_other_lane_when_selected_lane_entry_is_blocked
 
     assert len(state_after_blocked_spawn_attempt.vehicles) == 1
     assert all(vehicle.lane_index == 0 for vehicle in state_after_blocked_spawn_attempt.vehicles)
+
+
+def test_state_exposes_per_lane_light_states_for_each_inbound_lane():
+    simulation = _build_single_arm_simulation_for_spawn_tests(
+        seed=3,
+        spawn_rate=0.0,
+        inbound_lanes={
+            "N": (
+                InboundLaneSpawnConfig(movements=("straight",)),
+                InboundLaneSpawnConfig(movements=("left",)),
+            )
+        },
+    )
+
+    state = simulation.state()
+
+    assert state.lane_counts_by_arm == {"N": 2}
+    assert state.lane_light_states == {("N", 0): LightState.GREEN, ("N", 1): LightState.GREEN}

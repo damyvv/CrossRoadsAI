@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import isfinite
 from random import Random
 from typing import Mapping, Sequence
@@ -50,6 +50,21 @@ class VehicleSnapshot:
 class SimulationState:
     light_states: dict[str, LightState]
     vehicles: tuple[VehicleSnapshot, ...]
+    lane_light_states: dict[tuple[str, int], LightState] = field(default_factory=dict)
+    lane_counts_by_arm: dict[str, int] = field(default_factory=dict)
+
+
+def _lane_light_states_by_inbound_lane(
+    *,
+    arm_names: tuple[str, ...],
+    lanes_by_arm: Mapping[str, tuple["_LaneSpawnRuntimeConfig", ...]],
+    controller: TrafficLightController,
+) -> dict[tuple[str, int], LightState]:
+    return {
+        (arm, lane_index): controller.state(arm)
+        for arm in arm_names
+        for lane_index in range(len(lanes_by_arm[arm]))
+    }
 
 
 def _entry_occupied_by_arm(
@@ -95,6 +110,7 @@ def _advance_vehicles(
     vehicles: list[Vehicle],
     arm_names: tuple[str, ...],
     controller: TrafficLightController,
+    lane_light_states: Mapping[tuple[str, int], LightState] | None = None,
     min_following_distance: float,
     stop_margin_to_line: float,
     crossing_distance_by_arm: dict[str, float],
@@ -105,8 +121,13 @@ def _advance_vehicles(
         arm_lane_indices = sorted({vehicle.lane_index for vehicle in vehicles if vehicle.arm == arm})
         if not arm_lane_indices:
             continue
-        can_enter_intersection = controller.state(arm) == LightState.GREEN
         for lane_index in arm_lane_indices:
+            lane_state = (
+                controller.state(arm)
+                if lane_light_states is None
+                else lane_light_states.get((arm, lane_index), LightState.RED)
+            )
+            can_enter_intersection = lane_state == LightState.GREEN
             arm_lane_vehicles = sorted(
                 (
                     vehicle
@@ -285,8 +306,17 @@ class IntersectionSimulation:
         self._spawn_new_vehicles()
 
     def state(self) -> SimulationState:
+        lane_light_states = _lane_light_states_by_inbound_lane(
+            arm_names=self._arm_names,
+            lanes_by_arm=self._inbound_lanes_by_arm,
+            controller=self._controller,
+        )
         return SimulationState(
             light_states={arm: self._controller.state(arm) for arm in self._arm_names},
+            lane_light_states=lane_light_states,
+            lane_counts_by_arm={
+                arm: len(self._inbound_lanes_by_arm[arm]) for arm in self._arm_names
+            },
             vehicles=tuple(
                 VehicleSnapshot(
                     arm=vehicle.arm,
@@ -305,6 +335,11 @@ class IntersectionSimulation:
         return self._metrics.average_wait_time()
 
     def advance_tick(self) -> None:
+        lane_light_states = _lane_light_states_by_inbound_lane(
+            arm_names=self._arm_names,
+            lanes_by_arm=self._inbound_lanes_by_arm,
+            controller=self._controller,
+        )
         # Track previous states to detect transitions to EXITED
         previous_states = {id(vehicle): vehicle.state for vehicle in self._vehicles}
 
@@ -312,6 +347,7 @@ class IntersectionSimulation:
             vehicles=self._vehicles,
             arm_names=self._arm_names,
             controller=self._controller,
+            lane_light_states=lane_light_states,
             min_following_distance=float(self._vehicle_flow.length + self._vehicle_flow.queue_gap),
             stop_margin_to_line=(float(self._vehicle_flow.length) / 2)
             + self._vehicle_flow.stop_distance_before_line,

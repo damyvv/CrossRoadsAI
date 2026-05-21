@@ -37,7 +37,7 @@ intersection:
           right: 0.5
 
 road:
-  width: 120
+  lane_width: 20
   stop_line_distance: 70
 
 vehicle:

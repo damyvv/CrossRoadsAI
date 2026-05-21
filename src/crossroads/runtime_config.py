@@ -17,7 +17,8 @@ class RuntimeConfig:
     window_height: int
     arm_count: int
     missing_arm: str | None
-    road_width: int
+    road_width: int | None
+    road_lane_width: int | None
     stop_line_distance: int
     green_duration_ticks: int
     yellow_duration_ticks: int
@@ -46,7 +47,7 @@ _REQUIRED_KEYS = {
     "window_width",
     "window_height",
     "arm_count",
-    "road_width",
+    "road_lane_width",
     "stop_line_distance",
     "green_duration_ticks",
     "yellow_duration_ticks",
@@ -85,7 +86,7 @@ _NESTED_SECTIONS = {
         "arm_count": "arm_count",
     },
     "road": {
-        "width": "road_width",
+        "lane_width": "road_lane_width",
         "stop_line_distance": "stop_line_distance",
     },
     "vehicle": {
@@ -547,7 +548,8 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         window_height=_parse_int(data, "window_height", minimum=1),
         arm_count=arm_count,
         missing_arm=missing_arm,
-        road_width=_parse_int(data, "road_width", minimum=1),
+        road_width=None,
+        road_lane_width=_parse_int(data, "road_lane_width", minimum=1),
         stop_line_distance=_parse_int(data, "stop_line_distance", minimum=0),
         green_duration_ticks=_parse_int(data, "green_duration_ticks", minimum=1),
         yellow_duration_ticks=_parse_int(data, "yellow_duration_ticks", minimum=1),
@@ -591,6 +593,7 @@ def legacy_runtime_config() -> RuntimeConfig:
         arm_count=legacy_config.ARM_COUNT,
         missing_arm=None,
         road_width=legacy_config.ROAD_WIDTH,
+        road_lane_width=None,
         stop_line_distance=legacy_config.STOP_LINE_DISTANCE,
         green_duration_ticks=legacy_config.GREEN_DURATION_TICKS,
         yellow_duration_ticks=legacy_config.YELLOW_DURATION_TICKS,

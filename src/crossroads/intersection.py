@@ -1,3 +1,4 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Callable
 
@@ -70,7 +71,11 @@ def build_intersection_geometry(
     window_height: int,
     arm_count: int,
     missing_arm: str | None = None,
-    road_width: int,
+    road_width: int | None = None,
+    road_width_by_arm: Mapping[str, int] | None = None,
+    inbound_lane_count_by_arm: Mapping[str, int] | None = None,
+    lane_width: int | None = None,
+    outbound_lane_count: int = 2,
     stop_line_distance: int,
 ) -> IntersectionGeometry:
     if arm_count not in {2, 3, 4}:
@@ -86,6 +91,41 @@ def build_intersection_geometry(
     center = (window_width // 2, window_height // 2)
     cx, cy = center
     arm_names = _resolve_arm_names(arm_count=arm_count, missing_arm=missing_arm)
+    arm_names_set = set(arm_names)
+
+    if road_width_by_arm is None:
+        if road_width is None:
+            raise ValueError("road_width or road_width_by_arm must be provided")
+        road_width_by_arm = {arm: road_width for arm in arm_names}
+    else:
+        missing_widths = sorted(arm_names_set - set(road_width_by_arm))
+        if missing_widths:
+            raise ValueError(f"missing road width definitions for arms: {missing_widths!r}")
+        road_width_by_arm = {arm: road_width_by_arm[arm] for arm in arm_names}
+
+    if inbound_lane_count_by_arm is None:
+        if road_width is None:
+            raise ValueError("road_width is required when inbound_lane_count_by_arm is not provided")
+        inbound_width_by_arm = {arm: road_width_by_arm[arm] // 2 for arm in arm_names}
+        outbound_width_by_arm = {arm: road_width_by_arm[arm] // 2 for arm in arm_names}
+        legacy_mode = True
+    else:
+        if lane_width is None:
+            raise ValueError("lane_width is required when inbound_lane_count_by_arm is provided")
+        if lane_width <= 0:
+            raise ValueError("lane_width must be positive")
+        if outbound_lane_count <= 0:
+            raise ValueError("outbound_lane_count must be positive")
+        missing_inbound = sorted(arm_names_set - set(inbound_lane_count_by_arm))
+        if missing_inbound:
+            raise ValueError(f"missing inbound lane count definitions for arms: {missing_inbound!r}")
+        inbound_width_by_arm = {
+            arm: inbound_lane_count_by_arm[arm] * lane_width for arm in arm_names
+        }
+        outbound_width_by_arm = {
+            arm: outbound_lane_count * lane_width for arm in arm_names
+        }
+        legacy_mode = False
 
     arms = []
     center_lines = []
@@ -104,7 +144,12 @@ def build_intersection_geometry(
 
         center_line = (position, stop_line_center)
 
-        stop_line = _compute_stop_line(stop_line_center, dx, dy, road_width)
+        stop_line = _compute_stop_line(
+            center_point=stop_line_center,
+            dx=dx,
+            dy=dy,
+            inbound_width=inbound_width_by_arm[name],
+        )
 
         arms.append(
             ArmGeometry(
@@ -123,6 +168,10 @@ def build_intersection_geometry(
         cy=cy,
         window_width=window_width,
         window_height=window_height,
+        arm_names=arm_names,
+        inbound_width_by_arm=inbound_width_by_arm,
+        outbound_width_by_arm=outbound_width_by_arm,
+        legacy_mode=legacy_mode,
         road_width=road_width,
     )
 
@@ -151,36 +200,57 @@ def _build_road_rects(
     cy: int,
     window_width: int,
     window_height: int,
-    road_width: int,
+    arm_names: Sequence[str],
+    inbound_width_by_arm: Mapping[str, int],
+    outbound_width_by_arm: Mapping[str, int],
+    legacy_mode: bool,
+    road_width: int | None,
 ) -> list[tuple[int, int, int, int]]:
-    if arm_count in _TOPOLOGIES:
-        return _TOPOLOGIES[arm_count].road_rects_fn(
-            cx, cy, window_width, window_height, road_width
-        )
+    if legacy_mode:
+        assert road_width is not None
+        if arm_count in _TOPOLOGIES:
+            return _TOPOLOGIES[arm_count].road_rects_fn(
+                cx, cy, window_width, window_height, road_width
+            )
+        assert missing_arm is not None
+        vertical_full = (cx - road_width // 2, 0, road_width, window_height)
+        horizontal_full = (0, cy - road_width // 2, window_width, road_width)
 
-    assert missing_arm is not None
-    vertical_full = (cx - road_width // 2, 0, road_width, window_height)
-    horizontal_full = (0, cy - road_width // 2, window_width, road_width)
-
-    if missing_arm == "N":
-        return [
-            (cx - road_width // 2, cy, road_width, window_height - cy),
-            horizontal_full,
-        ]
-    if missing_arm == "S":
-        return [
-            (cx - road_width // 2, 0, road_width, cy),
-            horizontal_full,
-        ]
-    if missing_arm == "E":
+        if missing_arm == "N":
+            return [
+                (cx - road_width // 2, cy, road_width, window_height - cy),
+                horizontal_full,
+            ]
+        if missing_arm == "S":
+            return [
+                (cx - road_width // 2, 0, road_width, cy),
+                horizontal_full,
+            ]
+        if missing_arm == "E":
+            return [
+                vertical_full,
+                (0, cy - road_width // 2, cx, road_width),
+            ]
         return [
             vertical_full,
-            (0, cy - road_width // 2, cx, road_width),
+            (cx, cy - road_width // 2, window_width - cx, road_width),
         ]
-    return [
-        vertical_full,
-        (cx, cy - road_width // 2, window_width - cx, road_width),
-    ]
+
+    _ = (arm_count, missing_arm)
+    road_rects: list[tuple[int, int, int, int]] = []
+    for arm in arm_names:
+        inbound_width = inbound_width_by_arm[arm]
+        outbound_width = outbound_width_by_arm[arm]
+        full_width = inbound_width + outbound_width
+        if arm == "N":
+            road_rects.append((cx - inbound_width, 0, full_width, cy))
+        elif arm == "S":
+            road_rects.append((cx - outbound_width, cy, full_width, window_height - cy))
+        elif arm == "E":
+            road_rects.append((cx, cy - inbound_width, window_width - cx, full_width))
+        elif arm == "W":
+            road_rects.append((0, cy - outbound_width, cx, full_width))
+    return road_rects
 
 
 def _compute_arm_position(
@@ -193,7 +263,11 @@ def _compute_arm_position(
 
 
 def _compute_stop_line(
-    center_point: tuple[int, int], dx: int, dy: int, road_width: int
+    *,
+    center_point: tuple[int, int],
+    dx: int,
+    dy: int,
+    inbound_width: int,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
     """Compute stop line from center of road to right edge.
     
@@ -204,15 +278,50 @@ def _compute_stop_line(
     - West (dx=-1): right is South (y+)
     """
     cx, cy = center_point
-    half_width = road_width // 2
 
     if dy != 0:
         # Vertical traffic (N/S): right is perpendicular on x-axis
         center_point_line = (cx, cy)
-        right_point = (cx - half_width, cy) if dy < 0 else (cx + half_width, cy)
+        right_point = (cx - inbound_width, cy) if dy < 0 else (cx + inbound_width, cy)
     else:
         # Horizontal traffic (E/W): right is perpendicular on y-axis
         center_point_line = (cx, cy)
-        right_point = (cx, cy - half_width) if dx > 0 else (cx, cy + half_width)
+        right_point = (cx, cy - inbound_width) if dx > 0 else (cx, cy + inbound_width)
 
     return (center_point_line, right_point)
+
+
+def compute_road_width_from_inbound_lanes(
+    *,
+    inbound_lanes_by_arm: Mapping[str, Sequence[object]],
+    lane_width: int,
+    outbound_lane_count: int = 2,
+) -> int:
+    return max(
+        compute_road_width_by_arm_from_inbound_lanes(
+            inbound_lanes_by_arm=inbound_lanes_by_arm,
+            lane_width=lane_width,
+            outbound_lane_count=outbound_lane_count,
+        ).values()
+    )
+
+
+def compute_road_width_by_arm_from_inbound_lanes(
+    *,
+    inbound_lanes_by_arm: Mapping[str, Sequence[object]],
+    lane_width: int,
+    outbound_lane_count: int = 2,
+) -> dict[str, int]:
+    if lane_width <= 0:
+        raise ValueError("lane_width must be positive")
+    if outbound_lane_count <= 0:
+        raise ValueError("outbound_lane_count must be positive")
+    if not inbound_lanes_by_arm:
+        raise ValueError("inbound_lanes_by_arm must not be empty")
+    for arm, lanes in inbound_lanes_by_arm.items():
+        if len(lanes) <= 0:
+            raise ValueError(f"each arm must define at least one inbound lane: {arm}")
+    return {
+        arm: (len(lanes) + outbound_lane_count) * lane_width
+        for arm, lanes in inbound_lanes_by_arm.items()
+    }
