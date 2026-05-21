@@ -44,9 +44,10 @@ class RuntimeConfig:
     hud_text_color: tuple[int, int, int] = (255, 255, 255)
     road_color: tuple[int, int, int] = (61, 61, 61)
     stop_line_color: tuple[int, int, int] = (245, 245, 245)
-    light_color_green: tuple[int, int, int] = (0, 200, 80)
-    light_color_yellow: tuple[int, int, int] = (255, 200, 0)
-    light_color_red: tuple[int, int, int] = (220, 30, 30)
+    # Use bright green to match renderer test expectations
+    light_color_green: tuple[int, int, int] = (0, 255, 0)
+    light_color_yellow: tuple[int, int, int] = (255, 255, 0)
+    light_color_red: tuple[int, int, int] = (255, 0, 0)
     traffic_light_radius: int = 6
     vehicle_color: tuple[int, int, int] = (70, 130, 240)
 
