@@ -207,6 +207,14 @@ def render(
     center_x = current_width // 2
     center_y = current_height // 2
 
+    # Use runtime_config defaults when optional parameters were not provided
+    world_window_width = world_window_width or runtime_config.window_width
+    world_window_height = world_window_height or runtime_config.window_height
+    road_width = road_width if road_width is not None else (runtime_config.road_width if runtime_config.road_width is not None else 120)
+    lane_width = lane_width if lane_width is not None else runtime_config.vehicle_width
+    vehicle_length = vehicle_length if vehicle_length is not None else runtime_config.vehicle_length
+    vehicle_width = vehicle_width if vehicle_width is not None else runtime_config.vehicle_width
+
     bg_color = runtime_config.background_color
     surface.fill(bg_color)
 
