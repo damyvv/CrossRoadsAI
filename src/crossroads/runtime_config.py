@@ -119,25 +119,55 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     To:
       window_width: 960
       window_height: 720
+    
+    Raises ValueError if config mixes nested and flat formats.
     """
-    # Check if this is already flat format (has keys like window_width)
-    # If any expected flat keys exist, assume it's flat format and return as-is
-    if any(key in data for key in _REQUIRED_KEYS):
+    top_level_keys = set(data.keys())
+    nested_section_keys = set(_NESTED_SECTIONS.keys())
+    flat_format_keys = _ALLOWED_KEYS
+    
+    # Check which format is present
+    has_nested_keys = bool(top_level_keys & nested_section_keys)
+    has_flat_keys = bool(top_level_keys & flat_format_keys)
+    
+    # Reject mixed formats
+    if has_nested_keys and has_flat_keys:
+        mixed = sorted((top_level_keys & flat_format_keys) | (top_level_keys & nested_section_keys))
+        raise ValueError(
+            f"config mixes flat and nested formats; found both flat keys ({sorted(top_level_keys & flat_format_keys)[0] if top_level_keys & flat_format_keys else 'none'}) "
+            f"and nested sections ({sorted(top_level_keys & nested_section_keys)[0] if top_level_keys & nested_section_keys else 'none'})"
+        )
+    
+    # If flat format, return as-is
+    if has_flat_keys:
         return data
     
-    # Validate no unknown sections in nested format
-    known_sections = set(_NESTED_SECTIONS.keys())
-    unknown_keys = sorted(set(data) - known_sections)
-    if unknown_keys:
-        raise ValueError(f"unknown key: {unknown_keys[0]}")
-    
+    # Parse nested format
     flat = {}
     
+    # Validate no unknown sections
+    unknown_sections = sorted(top_level_keys - nested_section_keys)
+    if unknown_sections:
+        raise ValueError(f"unknown key: {unknown_sections[0]}")
+    
+    # Flatten each section, validating keys within sections
     for section, key_mapping in _NESTED_SECTIONS.items():
         if section in data:
             section_data = data[section]
             if not isinstance(section_data, dict):
                 raise ValueError(f"{section} must be a mapping")
+            
+            # Validate no unknown keys within the section
+            # Special case: vehicle section also allows spawn_rate_per_second_by_arm
+            allowed_nested_keys = set(key_mapping.keys())
+            if section == "vehicle":
+                allowed_nested_keys.add("spawn_rate_per_second_by_arm")
+            
+            unknown_nested_keys = sorted(set(section_data.keys()) - allowed_nested_keys)
+            if unknown_nested_keys:
+                raise ValueError(f"unknown key in {section} section: {unknown_nested_keys[0]}")
+            
+            # Flatten the section
             for nested_key, flat_key in key_mapping.items():
                 if nested_key in section_data:
                     flat[flat_key] = section_data[nested_key]
