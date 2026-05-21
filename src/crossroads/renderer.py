@@ -90,6 +90,7 @@ def _draw_vehicle(
     world_window_height: int,
     road_width: int,
     lane_width: int,
+    carriageway_separation: int,
     vehicle_length: int,
     vehicle_width: int,
 ) -> None:
@@ -103,6 +104,7 @@ def _draw_vehicle(
         lane_index=lane_index,
         lane_count=lane_count,
         lane_width=lane_width,
+        carriageway_separation=carriageway_separation,
     )
     adj_x = center_x - world_window_width // 2 + world_x
     adj_y = center_y - world_window_height // 2 + world_y
@@ -158,6 +160,7 @@ def _draw_lane_signals(
     world_window_height: int,
     road_width: int,
     lane_width: int,
+    carriageway_separation: int,
 ) -> None:
     for arm in geometry.arms:
         lane_count = state.lane_counts_by_arm.get(arm.name, 1)
@@ -175,6 +178,7 @@ def _draw_lane_signals(
                     lane_index=lane_index,
                     lane_count=lane_count,
                     lane_width=lane_width,
+                    carriageway_separation=carriageway_separation,
                 )
                 signal_y = float(arm.stop_line[0][1])
             else:
@@ -187,6 +191,7 @@ def _draw_lane_signals(
                     lane_index=lane_index,
                     lane_count=lane_count,
                     lane_width=lane_width,
+                    carriageway_separation=carriageway_separation,
                 )
                 signal_x = float(arm.stop_line[0][0])
 
@@ -205,6 +210,7 @@ def render(
     world_window_height: int = WINDOW_HEIGHT,
     road_width: int = ROAD_WIDTH,
     lane_width: int = VEHICLE_WIDTH,
+    carriageway_separation: int = 0,
     vehicle_length: int = VEHICLE_LENGTH,
     vehicle_width: int = VEHICLE_WIDTH,
 ) -> None:
@@ -280,6 +286,7 @@ def render(
             world_window_height=world_window_height,
             road_width=road_width,
             lane_width=lane_width,
+            carriageway_separation=carriageway_separation,
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
         )
@@ -294,6 +301,7 @@ def render(
         world_window_height=world_window_height,
         road_width=road_width,
         lane_width=lane_width,
+        carriageway_separation=carriageway_separation,
     )
 
     # Draw HUD metrics

@@ -225,3 +225,49 @@ def test_build_intersection_geometry_uses_per_arm_width_and_inbound_stop_line_sp
         (cx, cy + STOP_LINE_DISTANCE),
         (cx + (3 * lane_width), cy + STOP_LINE_DISTANCE),
     )
+
+
+def test_build_intersection_geometry_rejects_negative_carriageway_separation():
+    with pytest.raises(ValueError, match="carriageway_separation must be >= 0"):
+        build_intersection_geometry(
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            arm_count=4,
+            road_width_by_arm={"N": 84, "E": 48, "S": 60, "W": 48},
+            inbound_lane_count_by_arm={"N": 5, "E": 2, "S": 3, "W": 2},
+            lane_width=12,
+            carriageway_separation=-1,
+            outbound_lane_count=2,
+            stop_line_distance=STOP_LINE_DISTANCE,
+        )
+
+
+def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line_span():
+    lane_width = 12
+    carriageway_separation = 10
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 84, "E": 48, "S": 60, "W": 48},
+        inbound_lane_count_by_arm={"N": 5, "E": 2, "S": 3, "W": 2},
+        lane_width=lane_width,
+        carriageway_separation=carriageway_separation,
+        outbound_lane_count=2,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+    north_arm = geometry.arms[0]
+    south_arm = geometry.arms[2]
+    expected_north_offset = (5 * lane_width) + carriageway_separation // 2
+    expected_south_offset = (3 * lane_width) + carriageway_separation // 2
+
+    assert north_arm.stop_line == (
+        (cx, cy - STOP_LINE_DISTANCE),
+        (cx - expected_north_offset, cy - STOP_LINE_DISTANCE),
+    )
+    assert south_arm.stop_line == (
+        (cx, cy + STOP_LINE_DISTANCE),
+        (cx + expected_south_offset, cy + STOP_LINE_DISTANCE),
+    )

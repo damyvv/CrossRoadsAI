@@ -77,6 +77,52 @@ def test_lane_centerline_uses_right_hand_inbound_lane_offset():
     assert w_pos == (0.0, cy + lane_offset)
 
 
+def test_lane_centerline_applies_carriageway_separation_symmetrically():
+    cx = WINDOW_WIDTH // 2
+    cy = WINDOW_HEIGHT // 2
+    lane_offset = ROAD_WIDTH / 4
+    carriageway_separation = 12
+    expected_offset = (carriageway_separation / 2) + lane_offset
+
+    n_pos = lane_center_world_position(
+        arm="N",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
+        carriageway_separation=carriageway_separation,
+    )
+    s_pos = lane_center_world_position(
+        arm="S",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
+        carriageway_separation=carriageway_separation,
+    )
+    e_pos = lane_center_world_position(
+        arm="E",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
+        carriageway_separation=carriageway_separation,
+    )
+    w_pos = lane_center_world_position(
+        arm="W",
+        distance=0.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
+        carriageway_separation=carriageway_separation,
+    )
+
+    assert n_pos == (cx - expected_offset, 0.0)
+    assert s_pos == (cx + expected_offset, WINDOW_HEIGHT - 1.0)
+    assert e_pos == (WINDOW_WIDTH - 1.0, cy - expected_offset)
+    assert w_pos == (0.0, cy + expected_offset)
+
+
 def test_vehicle_state_boundaries_follow_approaching_crossing_exited_discard():
     thresholds = state_thresholds_for_arm(
         arm="N",
