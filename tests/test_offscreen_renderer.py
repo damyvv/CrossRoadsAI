@@ -144,7 +144,8 @@ def test_offscreen_renderer_draws_one_signal_head_per_lane():
         state=state,
         average_wait_time=0.0,
         road_width=road_width,
-        vehicle_width=lane_width,
+        vehicle_width=VEHICLE_WIDTH,
+        lane_width=lane_width,
     )
 
     north_stop_line_y = geometry.arms[0].stop_line[0][1]
