@@ -17,7 +17,7 @@ from crossroads.traffic_phasing import default_four_way_phases
 from crossroads.vehicle import Vehicle, VehicleState, spawn_distance_for_length, state_thresholds_for_arm
 
 
-def _vehicle_on_arm(*, arm: str, position: float) -> Vehicle:
+def _vehicle_on_arm(*, arm: str, position: float, lane_index: int = 0) -> Vehicle:
     thresholds = state_thresholds_for_arm(
         arm=arm,
         window_width=WINDOW_WIDTH,
@@ -35,6 +35,7 @@ def _vehicle_on_arm(*, arm: str, position: float) -> Vehicle:
         acceleration=VEHICLE_ACCELERATION,
         deceleration=VEHICLE_DECELERATION,
         position=position,
+        lane_index=lane_index,
     )
 
 
@@ -134,3 +135,38 @@ def test_advance_vehicles_respects_configurable_stop_distance_before_line():
             break
 
     assert vehicle.position <= vehicle.crossing_distance - stop_margin
+
+
+def test_advance_vehicles_gates_entry_by_lane_signal_state():
+    red_lane_vehicle = _vehicle_on_arm(arm="E", position=390.0, lane_index=0)
+    green_lane_vehicle = _vehicle_on_arm(arm="E", position=390.0, lane_index=1)
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=list(default_four_way_phases()),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
+    for _ in range(90):
+        _advance_vehicles(
+            vehicles=[red_lane_vehicle, green_lane_vehicle],
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            lane_light_states={
+                ("E", 0): LightState.RED,
+                ("E", 1): LightState.GREEN,
+            },
+            min_following_distance=float(VEHICLE_LENGTH + VEHICLE_QUEUE_GAP),
+            stop_margin_to_line=float(VEHICLE_LENGTH) / 2 + VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+            crossing_distance_by_arm={
+                "N": 0.0,
+                "E": red_lane_vehicle.crossing_distance,
+                "S": 0.0,
+                "W": 0.0,
+            },
+        )
+
+    assert red_lane_vehicle.state == VehicleState.STOPPED
+    assert red_lane_vehicle.position <= red_lane_vehicle.crossing_distance
+    assert green_lane_vehicle.state in {VehicleState.CROSSING, VehicleState.EXITED}
+    assert green_lane_vehicle.position > green_lane_vehicle.crossing_distance

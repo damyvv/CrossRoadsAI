@@ -1,7 +1,10 @@
 import pytest
 
 from crossroads.config import ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
-from crossroads.intersection import build_intersection_geometry
+from crossroads.intersection import (
+    build_intersection_geometry,
+    compute_road_width_from_inbound_lanes,
+)
 
 
 def test_build_intersection_geometry_has_four_cardinal_arms():
@@ -140,3 +143,40 @@ def test_build_intersection_geometry_two_way():
         (cx, WINDOW_HEIGHT - 1),
     ]
     assert len(geometry.road_rects) == 1
+
+
+def test_compute_road_width_from_inbound_lanes_scales_with_max_lane_count():
+    road_width = compute_road_width_from_inbound_lanes(
+        inbound_lanes_by_arm={
+            "N": (object(), object(), object(), object(), object()),
+            "E": (object(), object()),
+            "S": (object(),),
+            "W": (object(), object()),
+        },
+        lane_width=12,
+    )
+
+    assert road_width == 120
+
+
+@pytest.mark.parametrize(
+    ("inbound_lanes_by_arm", "lane_width", "expected_road_width"),
+    [
+        ({"N": (object(),), "S": (object(),)}, 10, 20),
+        ({"N": (object(), object()), "E": (object(),), "W": (object(),)}, 9, 36),
+        (
+            {"N": (object(),), "E": (object(), object(), object()), "S": (object(),)},
+            8,
+            48,
+        ),
+    ],
+)
+def test_compute_road_width_from_inbound_lanes_supports_2_3_4_arm_topologies(
+    inbound_lanes_by_arm, lane_width, expected_road_width
+):
+    assert (
+        compute_road_width_from_inbound_lanes(
+            inbound_lanes_by_arm=inbound_lanes_by_arm, lane_width=lane_width
+        )
+        == expected_road_width
+    )

@@ -1,3 +1,4 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Callable
 
@@ -216,3 +217,20 @@ def _compute_stop_line(
         right_point = (cx, cy - half_width) if dx > 0 else (cx, cy + half_width)
 
     return (center_point_line, right_point)
+
+
+def compute_road_width_from_inbound_lanes(
+    *,
+    inbound_lanes_by_arm: Mapping[str, Sequence[object]],
+    lane_width: int,
+) -> int:
+    if lane_width <= 0:
+        raise ValueError("lane_width must be positive")
+    if not inbound_lanes_by_arm:
+        raise ValueError("inbound_lanes_by_arm must not be empty")
+
+    max_lane_count = max(len(lanes) for lanes in inbound_lanes_by_arm.values())
+    if max_lane_count <= 0:
+        raise ValueError("each arm must define at least one inbound lane")
+
+    return lane_width * max_lane_count * 2

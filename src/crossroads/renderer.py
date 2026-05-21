@@ -84,9 +84,12 @@ def _draw_vehicle(
     center_x: int,
     center_y: int,
     *,
+    lane_index: int,
+    lane_count: int,
     world_window_width: int,
     world_window_height: int,
     road_width: int,
+    lane_width: int,
     vehicle_length: int,
     vehicle_width: int,
 ) -> None:
@@ -97,6 +100,9 @@ def _draw_vehicle(
         window_width=world_window_width,
         window_height=world_window_height,
         road_width=road_width,
+        lane_index=lane_index,
+        lane_count=lane_count,
+        lane_width=lane_width,
     )
     adj_x = center_x - world_window_width // 2 + world_x
     adj_y = center_y - world_window_height // 2 + world_y
@@ -139,6 +145,54 @@ def _draw_hud_metrics(
 
     pygame.draw.rect(surface, HUD_BACKGROUND_COLOR, bg_rect)
     surface.blit(text_surface, (text_x, text_y))
+
+
+def _draw_lane_signals(
+    *,
+    surface: pygame.Surface,
+    geometry: IntersectionGeometry,
+    state: SimulationState,
+    center_x: int,
+    center_y: int,
+    world_window_width: int,
+    world_window_height: int,
+    road_width: int,
+    lane_width: int,
+) -> None:
+    for arm in geometry.arms:
+        lane_count = state.lane_counts_by_arm.get(arm.name, 1)
+        lane_signal_states = state.lane_light_states
+        for lane_index in range(lane_count):
+            lane_state = lane_signal_states.get((arm.name, lane_index), state.light_states[arm.name])
+            color = _LIGHT_COLORS[lane_state]
+            if arm.name in ("N", "S"):
+                signal_x, _ = lane_center_world_position(
+                    arm=arm.name,
+                    distance=0.0,
+                    window_width=world_window_width,
+                    window_height=world_window_height,
+                    road_width=road_width,
+                    lane_index=lane_index,
+                    lane_count=lane_count,
+                    lane_width=lane_width,
+                )
+                signal_y = float(arm.stop_line[0][1])
+            else:
+                _, signal_y = lane_center_world_position(
+                    arm=arm.name,
+                    distance=0.0,
+                    window_width=world_window_width,
+                    window_height=world_window_height,
+                    road_width=road_width,
+                    lane_index=lane_index,
+                    lane_count=lane_count,
+                    lane_width=lane_width,
+                )
+                signal_x = float(arm.stop_line[0][0])
+
+            adj_x = int(center_x - world_window_width // 2 + signal_x)
+            adj_y = int(center_y - world_window_height // 2 + signal_y)
+            pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
 
 
 def render(
@@ -212,27 +266,34 @@ def render(
 
     # Draw vehicles
     for vehicle in state.vehicles:
+        lane_count = state.lane_counts_by_arm.get(vehicle.arm, 1)
         _draw_vehicle(
             surface=surface,
             arm=vehicle.arm,
             position=vehicle.position,
             center_x=center_x,
             center_y=center_y,
+            lane_index=vehicle.lane_index,
+            lane_count=lane_count,
             world_window_width=world_window_width,
             world_window_height=world_window_height,
             road_width=road_width,
+            lane_width=vehicle_width,
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
         )
 
-    # Draw traffic lights
-    for arm in geometry.arms:
-        mid_x = (arm.stop_line[0][0] + arm.stop_line[1][0]) // 2
-        mid_y = (arm.stop_line[0][1] + arm.stop_line[1][1]) // 2
-        adj_x = center_x - world_window_width // 2 + mid_x
-        adj_y = center_y - world_window_height // 2 + mid_y
-        color = _LIGHT_COLORS[state.light_states[arm.name]]
-        pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
+    _draw_lane_signals(
+        surface=surface,
+        geometry=geometry,
+        state=state,
+        center_x=center_x,
+        center_y=center_y,
+        world_window_width=world_window_width,
+        world_window_height=world_window_height,
+        road_width=road_width,
+        lane_width=vehicle_width,
+    )
 
     # Draw HUD metrics
     _draw_hud_metrics(
