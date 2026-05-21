@@ -39,19 +39,6 @@ _TOPOLOGIES = {
             (cx - road_width // 2, 0, road_width, window_height),
         ],
     ),
-    3: IntersectionTopology(
-        arm_count=3,
-        arm_names=["N", "E", "W"],
-        arm_specs=[
-            {"dx": 0, "dy": -1, "position_offset": (0, 0)},
-            {"dx": 1, "dy": 0, "position_offset": (0, 0)},
-            {"dx": -1, "dy": 0, "position_offset": (0, 0)},
-        ],
-        road_rects_fn=lambda cx, cy, window_width, window_height, road_width: [
-            (cx - road_width // 2, 0, road_width, cy),
-            (0, cy - road_width // 2, window_width, road_width),
-        ],
-    ),
     4: IntersectionTopology(
         arm_count=4,
         arm_names=["N", "E", "S", "W"],
@@ -68,28 +55,43 @@ _TOPOLOGIES = {
     ),
 }
 
+_CARDINAL_ARM_ORDER = ("N", "E", "S", "W")
+_ARM_DIRECTION = {
+    "N": (0, -1),
+    "E": (1, 0),
+    "S": (0, 1),
+    "W": (-1, 0),
+}
+
 
 def build_intersection_geometry(
     *,
     window_width: int,
     window_height: int,
     arm_count: int,
+    missing_arm: str | None = None,
     road_width: int,
     stop_line_distance: int,
 ) -> IntersectionGeometry:
-    if arm_count not in _TOPOLOGIES:
+    if arm_count not in {2, 3, 4}:
         raise ValueError("arm_count must be 2, 3, or 4")
+    if arm_count == 3:
+        if missing_arm is None:
+            raise ValueError("missing_arm is required when arm_count is 3")
+        if missing_arm not in _CARDINAL_ARM_ORDER:
+            raise ValueError("missing_arm must be one of: N, E, S, W")
+    elif missing_arm is not None:
+        raise ValueError("missing_arm is only supported when arm_count is 3")
 
     center = (window_width // 2, window_height // 2)
     cx, cy = center
-    topology = _TOPOLOGIES[arm_count]
+    arm_names = _resolve_arm_names(arm_count=arm_count, missing_arm=missing_arm)
 
     arms = []
     center_lines = []
 
-    for index, arm_spec in enumerate(topology.arm_specs):
-        dx, dy = arm_spec["dx"], arm_spec["dy"]
-        name = topology.arm_names[index]
+    for name in arm_names:
+        dx, dy = _ARM_DIRECTION[name]
 
         stop_line_center = (
             cx + dx * stop_line_distance,
@@ -114,8 +116,14 @@ def build_intersection_geometry(
         )
         center_lines.append(center_line)
 
-    road_rects = topology.road_rects_fn(
-        cx, cy, window_width, window_height, road_width
+    road_rects = _build_road_rects(
+        arm_count=arm_count,
+        missing_arm=missing_arm,
+        cx=cx,
+        cy=cy,
+        window_width=window_width,
+        window_height=window_height,
+        road_width=road_width,
     )
 
     return IntersectionGeometry(
@@ -124,6 +132,55 @@ def build_intersection_geometry(
         road_rects=road_rects,
         arm_center_lines=center_lines,
     )
+
+
+def _resolve_arm_names(*, arm_count: int, missing_arm: str | None) -> list[str]:
+    if arm_count == 4:
+        return list(_CARDINAL_ARM_ORDER)
+    if arm_count == 3:
+        assert missing_arm is not None
+        return [arm for arm in _CARDINAL_ARM_ORDER if arm != missing_arm]
+    return ["N", "S"]
+
+
+def _build_road_rects(
+    *,
+    arm_count: int,
+    missing_arm: str | None,
+    cx: int,
+    cy: int,
+    window_width: int,
+    window_height: int,
+    road_width: int,
+) -> list[tuple[int, int, int, int]]:
+    if arm_count in _TOPOLOGIES:
+        return _TOPOLOGIES[arm_count].road_rects_fn(
+            cx, cy, window_width, window_height, road_width
+        )
+
+    assert missing_arm is not None
+    vertical_full = (cx - road_width // 2, 0, road_width, window_height)
+    horizontal_full = (0, cy - road_width // 2, window_width, road_width)
+
+    if missing_arm == "N":
+        return [
+            (cx - road_width // 2, cy, road_width, window_height - cy),
+            horizontal_full,
+        ]
+    if missing_arm == "S":
+        return [
+            (cx - road_width // 2, 0, road_width, cy),
+            horizontal_full,
+        ]
+    if missing_arm == "E":
+        return [
+            vertical_full,
+            (0, cy - road_width // 2, cx, road_width),
+        ]
+    return [
+        vertical_full,
+        (cx, cy - road_width // 2, window_width - cx, road_width),
+    ]
 
 
 def _compute_arm_position(
@@ -159,4 +216,3 @@ def _compute_stop_line(
         right_point = (cx, cy - half_width) if dx > 0 else (cx, cy + half_width)
 
     return (center_point_line, right_point)
-

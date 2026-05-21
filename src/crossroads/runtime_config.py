@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -53,11 +54,11 @@ _REQUIRED_KEYS = {
     "vehicle_spawn_rate_per_second",
     "vehicle_spawn_seed",
 }
-_OPTIONAL_KEYS = {"vehicle_spawn_rate_per_second_by_arm", "_topology_data", "_phases_data"}
+_OPTIONAL_KEYS = {"missing_arm", "vehicle_spawn_rate_per_second_by_arm", "_phases_data"}
 _ALLOWED_KEYS = _REQUIRED_KEYS | _OPTIONAL_KEYS
 _VALID_ARMS_BY_COUNT = {
     2: {"N", "S"},
-    3: {"N", "E", "W"},
+    3: {"N", "E", "S", "W"},
     4: {"N", "E", "S", "W"},
 }
 _SUPPORTED_ARM_COUNTS = {4}
@@ -90,7 +91,6 @@ _NESTED_SECTIONS = {
         "ticks_per_second": "simulation_ticks_per_second",
         "vehicle_spawn_seed": "vehicle_spawn_seed",
     },
-    "topology": {},
 }
 
 
@@ -113,8 +113,8 @@ def _load_raw_yaml(path: Path) -> dict[str, Any]:
 def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     """Flatten nested YAML structure into flat structure.
     
-    Converts nested format to flat structure. Topology and phases are handled
-    separately as they have special parsing logic.
+    Converts nested format to flat structure. Phases are handled separately
+    as they have special parsing logic.
     
     Converts nested format:
       window:
@@ -127,9 +127,9 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     Validates that all required nested keys are present with helpful error messages.
     """
     top_level_keys = set(data.keys())
-    # Topology and phases are optional, not in _NESTED_SECTIONS
+    # phases is optional, not in _NESTED_SECTIONS
     nested_section_keys = set(_NESTED_SECTIONS.keys())
-    allowed_top_level = nested_section_keys | {"topology", "phases"}
+    allowed_top_level = nested_section_keys | {"phases"}
     
     # Validate no unknown sections
     unknown_sections = sorted(top_level_keys - allowed_top_level)
@@ -139,7 +139,7 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     # Validate required keys are present in their sections before flattening
     # This gives better error messages than the flat validation
     # Iterate in insertion order (not alphabetical) to match user expectations
-    required_sections_ordered = [s for s in _NESTED_SECTIONS.keys() if s != "topology"]
+    required_sections_ordered = list(_NESTED_SECTIONS.keys())
     
     # First pass: validate all required sections exist and are mappings
     for section in required_sections_ordered:
@@ -157,8 +157,10 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
         key_mapping = _NESTED_SECTIONS[section]
         
         # Validate no unknown keys within the section
-        # Special case: vehicle section also allows spawn_rate_per_second_by_arm
+        # Special cases for optional keys in sections
         allowed_nested_keys = set(key_mapping.keys())
+        if section == "intersection":
+            allowed_nested_keys.add("missing_arm")
         if section == "vehicle":
             allowed_nested_keys.add("spawn_rate_per_second_by_arm")
         
@@ -186,9 +188,12 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
         if "spawn_rate_per_second_by_arm" in data["vehicle"]:
             flat["vehicle_spawn_rate_per_second_by_arm"] = data["vehicle"]["spawn_rate_per_second_by_arm"]
     
-    # Store topology and phases raw data for later parsing
-    if "topology" in data:
-        flat["_topology_data"] = data["topology"]
+    # Handle optional intersection.missing_arm if provided
+    if "intersection" in data and isinstance(data["intersection"], dict):
+        if "missing_arm" in data["intersection"]:
+            flat["missing_arm"] = data["intersection"]["missing_arm"]
+
+    # Store phases raw data for later parsing
     if "phases" in data:
         flat["_phases_data"] = data["phases"]
     
@@ -241,10 +246,19 @@ def _parse_float(
     return parsed
 
 
+def _topology_arms(*, arm_count: int, missing_arm: str | None) -> set[str]:
+    arms = set(_VALID_ARMS_BY_COUNT[arm_count])
+    if arm_count == 3:
+        assert missing_arm is not None
+        arms.remove(missing_arm)
+    return arms
+
+
 def _parse_spawn_rates_by_arm(
     data: Mapping[str, Any],
     *,
     arm_count: int,
+    missing_arm: str | None,
 ) -> dict[str, float] | None:
     if "vehicle_spawn_rate_per_second_by_arm" not in data:
         return None
@@ -255,7 +269,7 @@ def _parse_spawn_rates_by_arm(
     if not isinstance(rates, dict):
         raise ValueError("vehicle_spawn_rate_per_second_by_arm must be a mapping")
 
-    valid_arms = _VALID_ARMS_BY_COUNT[arm_count]
+    valid_arms = _topology_arms(arm_count=arm_count, missing_arm=missing_arm)
     parsed: dict[str, float] = {}
     for arm, value in rates.items():
         if not isinstance(arm, str):
@@ -275,32 +289,22 @@ def _parse_spawn_rates_by_arm(
     return parsed
 
 
-def _parse_topology(data: Mapping[str, Any], *, arm_count: int) -> str | None:
-    """Parse missing_arm from topology section. Returns None if topology not specified or missing_arm not specified."""
-    if "_topology_data" not in data:
+def _parse_missing_arm(data: Mapping[str, Any], *, arm_count: int) -> str | None:
+    if "missing_arm" not in data:
+        if arm_count == 3:
+            raise ValueError("intersection.missing_arm is required when arm_count is 3")
         return None
-    
-    topology_data = data["_topology_data"]
-    if not isinstance(topology_data, dict):
-        raise ValueError("topology must be a mapping")
-    
-    # Validate allowed keys in topology
-    allowed_topology_keys = {"arm_count", "missing_arm"}
-    unknown_topology_keys = sorted(set(topology_data.keys()) - allowed_topology_keys)
-    if unknown_topology_keys:
-        raise ValueError(f"unknown key in topology section: {unknown_topology_keys[0]}")
-    
-    # If missing_arm not specified, return None
-    if "missing_arm" not in topology_data:
-        return None
-    
-    missing_arm = topology_data["missing_arm"]
+
+    if arm_count != 3:
+        raise ValueError("intersection.missing_arm is only allowed when arm_count is 3")
+
+    missing_arm = data["missing_arm"]
     if not isinstance(missing_arm, str):
-        raise ValueError("topology.missing_arm must be a string")
-    
-    valid_arms = _VALID_ARMS_BY_COUNT.get(arm_count, set())
+        raise ValueError("intersection.missing_arm must be a string")
+
+    valid_arms = _VALID_ARMS_BY_COUNT[3]
     if missing_arm not in valid_arms:
-        raise ValueError(f"invalid missing_arm '{missing_arm}' for arm_count {arm_count}")
+        raise ValueError(f"invalid intersection.missing_arm '{missing_arm}' for arm_count {arm_count}")
     
     return missing_arm
 
@@ -315,12 +319,9 @@ def _parse_phases(data: Mapping[str, Any], *, arm_count: int, missing_arm: str |
                 ArmPhase(arms=("E", "W"), name="EW"),
             )
         elif arm_count == 3:
-            # For 3-arm, we need at least one phase grouping
-            # Standard: the two remaining arms together
-            remaining_arms = _VALID_ARMS_BY_COUNT[3] - {missing_arm}
-            sorted_arms = tuple(sorted(remaining_arms))
-            phase_name = "".join(sorted_arms)
-            return (ArmPhase(arms=sorted_arms, name=phase_name),)
+            remaining_arms = tuple(sorted(_topology_arms(arm_count=arm_count, missing_arm=missing_arm)))
+            phase_name = "".join(remaining_arms)
+            return (ArmPhase(arms=remaining_arms, name=phase_name),)
         elif arm_count == 2:
             return (ArmPhase(arms=("N", "S"), name="NS"),)
         return ()
@@ -330,11 +331,10 @@ def _parse_phases(data: Mapping[str, Any], *, arm_count: int, missing_arm: str |
         raise ValueError("phases must be a list")
     
     # Determine valid arms for this topology
-    valid_arms = _VALID_ARMS_BY_COUNT.get(arm_count, set())
-    if missing_arm is not None:
-        valid_arms = valid_arms - {missing_arm}
+    valid_arms = _topology_arms(arm_count=arm_count, missing_arm=missing_arm)
     
     parsed_phases: list[ArmPhase] = []
+    phase_arms: list[str] = []
     for i, phase_item in enumerate(phases_data):
         if not isinstance(phase_item, dict):
             raise ValueError(f"phase {i} must be a mapping")
@@ -358,11 +358,20 @@ def _parse_phases(data: Mapping[str, Any], *, arm_count: int, missing_arm: str |
                 raise ValueError(f"phase {i} arms must be strings")
             if arm not in valid_arms:
                 raise ValueError(f"invalid arm '{arm}' in phase '{name}' for topology arm_count={arm_count}, missing_arm={missing_arm}")
-        
+            phase_arms.append(arm)
+
         parsed_phases.append(ArmPhase(arms=tuple(arms), name=name))
     
     if not parsed_phases:
         raise ValueError("phases list cannot be empty")
+
+    duplicates = sorted(arm for arm, count in Counter(phase_arms).items() if count > 1)
+    if duplicates:
+        raise ValueError(f"duplicate arms across phases: {duplicates!r}")
+
+    missing_arms = sorted(valid_arms - set(phase_arms))
+    if missing_arms:
+        raise ValueError(f"missing arms from phases: {missing_arms!r}")
     
     return tuple(parsed_phases)
 
@@ -371,13 +380,16 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
     _validate_known_keys(data)
     arm_count = _parse_int(data, "arm_count", allowed={2, 3, 4})
     
-    # Parse topology (missing_arm)
-    missing_arm = _parse_topology(data, arm_count=arm_count)
+    missing_arm = _parse_missing_arm(data, arm_count=arm_count)
     
     # Parse phases
     phases = _parse_phases(data, arm_count=arm_count, missing_arm=missing_arm)
     
-    spawn_rates_by_arm = _parse_spawn_rates_by_arm(data, arm_count=arm_count)
+    spawn_rates_by_arm = _parse_spawn_rates_by_arm(
+        data,
+        arm_count=arm_count,
+        missing_arm=missing_arm,
+    )
 
     return RuntimeConfig(
         window_width=_parse_int(data, "window_width", minimum=1),

@@ -1,3 +1,5 @@
+import pytest
+
 from crossroads.config import ROAD_WIDTH, STOP_LINE_DISTANCE, WINDOW_HEIGHT, WINDOW_WIDTH
 from crossroads.intersection import build_intersection_geometry
 
@@ -76,6 +78,7 @@ def test_build_intersection_geometry_three_way():
         window_width=WINDOW_WIDTH,
         window_height=WINDOW_HEIGHT,
         arm_count=3,
+        missing_arm="S",
         road_width=ROAD_WIDTH,
         stop_line_distance=STOP_LINE_DISTANCE,
     )
@@ -89,6 +92,35 @@ def test_build_intersection_geometry_three_way():
         (0, cy),
     ]
     assert len(geometry.road_rects) == 2
+
+
+def test_build_intersection_geometry_three_way_missing_arm_required():
+    with pytest.raises(ValueError, match="missing_arm is required when arm_count is 3"):
+        build_intersection_geometry(
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            arm_count=3,
+            road_width=ROAD_WIDTH,
+            stop_line_distance=STOP_LINE_DISTANCE,
+        )
+
+
+def test_build_intersection_geometry_three_way_missing_north_removes_north_arm():
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=3,
+        missing_arm="N",
+        road_width=ROAD_WIDTH,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    assert [arm.name for arm in geometry.arms] == ["E", "S", "W"]
+    cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+    assert geometry.road_rects == [
+        (cx - ROAD_WIDTH // 2, cy, ROAD_WIDTH, WINDOW_HEIGHT - cy),
+        (0, cy - ROAD_WIDTH // 2, WINDOW_WIDTH, ROAD_WIDTH),
+    ]
 
 
 def test_build_intersection_geometry_two_way():

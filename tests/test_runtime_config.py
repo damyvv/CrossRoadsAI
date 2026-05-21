@@ -285,8 +285,6 @@ def test_load_topology_4arm_from_yaml(tmp_path):
                 "  yellow_duration_ticks: 60",
                 "  ticks_per_second: 60",
                 "  vehicle_spawn_seed: 42",
-                "topology:",
-                "  arm_count: 4",
             ]
         )
     )
@@ -308,6 +306,7 @@ def test_load_topology_3arm_from_yaml_with_missing_arm(tmp_path):
                 "  height: 720",
                 "intersection:",
                 "  arm_count: 3",
+                "  missing_arm: N",
                 "road:",
                 "  width: 120",
                 "  stop_line_distance: 70",
@@ -325,9 +324,6 @@ def test_load_topology_3arm_from_yaml_with_missing_arm(tmp_path):
                 "  yellow_duration_ticks: 60",
                 "  ticks_per_second: 60",
                 "  vehicle_spawn_seed: 42",
-                "topology:",
-                "  arm_count: 3",
-                "  missing_arm: N",
             ]
         )
     )
@@ -366,8 +362,6 @@ def test_load_phases_from_yaml(tmp_path):
                 "  yellow_duration_ticks: 60",
                 "  ticks_per_second: 60",
                 "  vehicle_spawn_seed: 42",
-                "topology:",
-                "  arm_count: 4",
                 "phases:",
                 "  - arms: [N, S]",
                 "    name: NS",
@@ -397,6 +391,116 @@ def test_reject_phase_with_invalid_arm_for_topology(tmp_path):
                 "  height: 720",
                 "intersection:",
                 "  arm_count: 3",
+                "  missing_arm: N",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "phases:",
+                "  - arms: [N, S]",
+                "    name: NS",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="invalid arm .* in phase .* for topology"):
+        load_runtime_config(config_path)
+
+
+def test_reject_missing_arm_when_arm_count_is_3(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 3",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="intersection.missing_arm is required when arm_count is 3"):
+        load_runtime_config(config_path)
+
+
+def test_reject_missing_arm_when_arm_count_is_not_3(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "  missing_arm: N",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="intersection.missing_arm is only allowed when arm_count is 3"):
+        load_runtime_config(config_path)
+
+
+def test_reject_top_level_topology_section(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
                 "road:",
                 "  width: 120",
                 "  stop_line_distance: 70",
@@ -415,15 +519,127 @@ def test_reject_phase_with_invalid_arm_for_topology(tmp_path):
                 "  ticks_per_second: 60",
                 "  vehicle_spawn_seed: 42",
                 "topology:",
-                "  arm_count: 3",
                 "  missing_arm: N",
-                "phases:",
-                "  - arms: [N, S]",
-                "    name: NS",
             ]
         )
     )
 
-    with pytest.raises(ValueError, match="invalid arm .* in phase .* for topology"):
+    with pytest.raises(ValueError, match="unknown key: topology"):
         load_runtime_config(config_path)
 
+
+def test_reject_spawn_rate_for_missing_arm_in_three_arm_topology(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 3",
+                "  missing_arm: N",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "  spawn_rate_per_second_by_arm:",
+                "    N: 1.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="unknown arm in vehicle_spawn_rate_per_second_by_arm: N"):
+        load_runtime_config(config_path)
+
+
+def test_reject_phases_missing_topology_arms(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 3",
+                "  missing_arm: N",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "phases:",
+                "  - arms: [E, W]",
+                "    name: EW",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match=r"missing arms from phases: \['S'\]"):
+        load_runtime_config(config_path)
+
+
+def test_reject_duplicate_arms_across_phases(tmp_path):
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  width: 120",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+                "phases:",
+                "  - arms: [N, S]",
+                "    name: NS",
+                "  - arms: [N, E, W]",
+                "    name: NEW",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match=r"duplicate arms across phases: \['N'\]"):
+        load_runtime_config(config_path)
