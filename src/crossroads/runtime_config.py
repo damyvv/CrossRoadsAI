@@ -109,8 +109,7 @@ def _load_raw_yaml(path: Path) -> dict[str, Any]:
 def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     """Flatten nested YAML structure into flat structure.
     
-    Supports both nested format (with window, intersection, road, vehicle, simulation sections)
-    and flat format (with window_width, road_width, etc. keys at top level).
+    Only supports nested format (with window, intersection, road, vehicle, simulation sections).
     
     Converts nested format:
       window:
@@ -119,31 +118,9 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
     To:
       window_width: 960
       window_height: 720
-    
-    Raises ValueError if config mixes nested and flat formats.
     """
     top_level_keys = set(data.keys())
     nested_section_keys = set(_NESTED_SECTIONS.keys())
-    flat_format_keys = _ALLOWED_KEYS
-    
-    # Check which format is present
-    has_nested_keys = bool(top_level_keys & nested_section_keys)
-    has_flat_keys = bool(top_level_keys & flat_format_keys)
-    
-    # Reject mixed formats
-    if has_nested_keys and has_flat_keys:
-        mixed = sorted((top_level_keys & flat_format_keys) | (top_level_keys & nested_section_keys))
-        raise ValueError(
-            f"config mixes flat and nested formats; found both flat keys ({sorted(top_level_keys & flat_format_keys)[0] if top_level_keys & flat_format_keys else 'none'}) "
-            f"and nested sections ({sorted(top_level_keys & nested_section_keys)[0] if top_level_keys & nested_section_keys else 'none'})"
-        )
-    
-    # If flat format, return as-is
-    if has_flat_keys:
-        return data
-    
-    # Parse nested format
-    flat = {}
     
     # Validate no unknown sections
     unknown_sections = sorted(top_level_keys - nested_section_keys)
@@ -151,6 +128,7 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"unknown key: {unknown_sections[0]}")
     
     # Flatten each section, validating keys within sections
+    flat = {}
     for section, key_mapping in _NESTED_SECTIONS.items():
         if section in data:
             section_data = data[section]
