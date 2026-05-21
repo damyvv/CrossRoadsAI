@@ -59,6 +59,36 @@ _VALID_ARMS_BY_COUNT = {
 }
 _SUPPORTED_ARM_COUNTS = {4}
 
+_NESTED_SECTIONS = {
+    "window": {
+        "width": "window_width",
+        "height": "window_height",
+    },
+    "intersection": {
+        "arm_count": "arm_count",
+    },
+    "road": {
+        "width": "road_width",
+        "stop_line_distance": "stop_line_distance",
+    },
+    "vehicle": {
+        "top_speed": "vehicle_top_speed",
+        "acceleration": "vehicle_acceleration",
+        "deceleration": "vehicle_deceleration",
+        "length": "vehicle_length",
+        "width": "vehicle_width",
+        "queue_gap": "vehicle_queue_gap",
+        "stop_distance_before_line": "vehicle_stop_distance_before_line",
+        "spawn_rate_per_second": "vehicle_spawn_rate_per_second",
+    },
+    "simulation": {
+        "green_duration_ticks": "green_duration_ticks",
+        "yellow_duration_ticks": "yellow_duration_ticks",
+        "ticks_per_second": "simulation_ticks_per_second",
+        "vehicle_spawn_seed": "vehicle_spawn_seed",
+    },
+}
+
 
 def _load_raw_yaml(path: Path) -> dict[str, Any]:
     try:
@@ -74,6 +104,51 @@ def _load_raw_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("configuration must be a YAML mapping at the top level")
     return data
+
+
+def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
+    """Flatten nested YAML structure into flat structure.
+    
+    Supports both nested format (with window, intersection, road, vehicle, simulation sections)
+    and flat format (with window_width, road_width, etc. keys at top level).
+    
+    Converts nested format:
+      window:
+        width: 960
+        height: 720
+    To:
+      window_width: 960
+      window_height: 720
+    """
+    # Check if this is already flat format (has keys like window_width)
+    # If any expected flat keys exist, assume it's flat format and return as-is
+    if any(key in data for key in _REQUIRED_KEYS):
+        return data
+    
+    # Validate no unknown sections in nested format
+    known_sections = set(_NESTED_SECTIONS.keys())
+    unknown_keys = sorted(set(data) - known_sections)
+    if unknown_keys:
+        raise ValueError(f"unknown key: {unknown_keys[0]}")
+    
+    flat = {}
+    
+    for section, key_mapping in _NESTED_SECTIONS.items():
+        if section in data:
+            section_data = data[section]
+            if not isinstance(section_data, dict):
+                raise ValueError(f"{section} must be a mapping")
+            for nested_key, flat_key in key_mapping.items():
+                if nested_key in section_data:
+                    flat[flat_key] = section_data[nested_key]
+    
+    # Handle optional vehicle_spawn_rate_per_second_by_arm if it exists in vehicle section
+    if "vehicle" in data and isinstance(data["vehicle"], dict):
+        if "spawn_rate_per_second_by_arm" in data["vehicle"]:
+            flat["vehicle_spawn_rate_per_second_by_arm"] = data["vehicle"]["spawn_rate_per_second_by_arm"]
+    
+    return flat
+
 
 
 def _require_key(data: Mapping[str, Any], key: str) -> Any:
@@ -190,7 +265,9 @@ def load_runtime_config(path: Path | str) -> RuntimeConfig:
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(f"config file not found: {config_path}")
-    return _from_mapping(_load_raw_yaml(config_path))
+    raw_data = _load_raw_yaml(config_path)
+    flattened_data = _flatten_nested_yaml(raw_data)
+    return _from_mapping(flattened_data)
 
 
 def legacy_runtime_config() -> RuntimeConfig:
