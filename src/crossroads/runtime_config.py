@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -8,7 +7,7 @@ from typing import Any, Mapping
 import yaml
 
 from crossroads import config as legacy_config
-from crossroads.traffic_phasing import ArmPhase
+from crossroads.traffic_phasing import ArmPhase, validate_phase_schedule
 
 
 @dataclass(frozen=True)
@@ -334,7 +333,6 @@ def _parse_phases(data: Mapping[str, Any], *, arm_count: int, missing_arm: str |
     valid_arms = _topology_arms(arm_count=arm_count, missing_arm=missing_arm)
     
     parsed_phases: list[ArmPhase] = []
-    phase_arms: list[str] = []
     for i, phase_item in enumerate(phases_data):
         if not isinstance(phase_item, dict):
             raise ValueError(f"phase {i} must be a mapping")
@@ -358,22 +356,16 @@ def _parse_phases(data: Mapping[str, Any], *, arm_count: int, missing_arm: str |
                 raise ValueError(f"phase {i} arms must be strings")
             if arm not in valid_arms:
                 raise ValueError(f"invalid arm '{arm}' in phase '{name}' for topology arm_count={arm_count}, missing_arm={missing_arm}")
-            phase_arms.append(arm)
 
         parsed_phases.append(ArmPhase(arms=tuple(arms), name=name))
     
     if not parsed_phases:
         raise ValueError("phases list cannot be empty")
-
-    duplicates = sorted(arm for arm, count in Counter(phase_arms).items() if count > 1)
-    if duplicates:
-        raise ValueError(f"duplicate arms across phases: {duplicates!r}")
-
-    missing_arms = sorted(valid_arms - set(phase_arms))
-    if missing_arms:
-        raise ValueError(f"missing arms from phases: {missing_arms!r}")
-    
-    return tuple(parsed_phases)
+    return validate_phase_schedule(
+        arm_names=sorted(valid_arms),
+        phases=parsed_phases,
+        require_full_coverage=True,
+    )
 
 
 def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:

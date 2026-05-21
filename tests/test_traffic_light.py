@@ -110,10 +110,24 @@ class TestTrafficLightControllerConfiguration:
         else:
             raise AssertionError("Expected ValueError for missing phase arms")
 
-    def test_rejects_phases_with_duplicate_arms(self):
+    def test_allows_phases_with_duplicate_arms_across_phases(self):
         phases = [
             ArmPhase(arms=["N", "S"], name="NS"),
             ArmPhase(arms=["N", "E", "W"], name="NEW"),
+        ]
+
+        ctrl = TrafficLightController(
+            arm_names=["N", "S", "E", "W"],
+            phases=phases,
+            green_ticks=3,
+            yellow_ticks=2,
+        )
+        assert ctrl.state("N") == LightState.GREEN
+
+    def test_rejects_duplicate_arms_within_phase(self):
+        phases = [
+            ArmPhase(arms=["N", "S", "S"], name="NSS"),
+            ArmPhase(arms=["E", "W"], name="EW"),
         ]
 
         try:
@@ -124,9 +138,29 @@ class TestTrafficLightControllerConfiguration:
                 yellow_ticks=2,
             )
         except ValueError as exc:
-            assert "duplicate" in str(exc)
+            assert "within phase" in str(exc)
         else:
-            raise AssertionError("Expected ValueError for duplicate phase arms")
+            raise AssertionError("Expected ValueError for duplicate arms within phase")
+
+    def test_overlapping_arm_follows_active_phase_state(self):
+        phases = [
+            ArmPhase(arms=["N", "S"], name="NS"),
+            ArmPhase(arms=["N", "E", "W"], name="NEW"),
+        ]
+        ctrl = TrafficLightController(
+            arm_names=["N", "S", "E", "W"],
+            phases=phases,
+            green_ticks=3,
+            yellow_ticks=2,
+        )
+
+        # End first phase (3 green + 2 yellow), then NEW becomes active.
+        for _ in range(5):
+            ctrl.advance_tick()
+
+        assert ctrl.state("N") == LightState.GREEN
+        assert ctrl.state("S") == LightState.RED
+        assert ctrl.state("E") == LightState.GREEN
 
 
 class TestArmPhaseInput:

@@ -3,8 +3,7 @@ window:
   height: 720
 
 intersection:
-  arm_count: 3
-  missing_arm: S
+  arm_count: 4
 
 road:
   width: 120
@@ -27,7 +26,7 @@ simulation:
   vehicle_spawn_seed: 42
 
 phases:
-  - arms: [N]
+  - arms: [N, S]
     name: N
   - arms: [E, W]
     name: EW
