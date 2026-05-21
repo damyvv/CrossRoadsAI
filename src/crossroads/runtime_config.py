@@ -21,6 +21,7 @@ class RuntimeConfig:
     road_lane_width: int | None
     road_carriageway_separation: int | None
     stop_line_distance: int
+    stop_line_distance_by_arm: dict[str, int] | None
     green_duration_ticks: int
     yellow_duration_ticks: int
     simulation_ticks_per_second: int
@@ -67,6 +68,7 @@ _OPTIONAL_KEYS = {
     "missing_arm",
     "road_carriageway_separation",
     "vehicle_spawn_rate_per_second_by_arm",
+    "stop_line_distance_by_arm",
     "_phases_data",
     "_inbound_lanes_data",
 }
@@ -183,6 +185,7 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
             allowed_nested_keys.add("spawn_rate_per_second_by_arm")
         if section == "road":
             allowed_nested_keys.add("carriageway_separation")
+            allowed_nested_keys.add("stop_line_distance_by_arm")
         
         unknown_nested_keys = sorted(set(section_data.keys()) - allowed_nested_keys)
         if unknown_nested_keys:
@@ -209,6 +212,8 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
             flat["vehicle_spawn_rate_per_second_by_arm"] = data["vehicle"]["spawn_rate_per_second_by_arm"]
 
     if "road" in data and isinstance(data["road"], dict):
+        if "stop_line_distance_by_arm" in data["road"]:
+            flat["stop_line_distance_by_arm"] = data["road"]["stop_line_distance_by_arm"]
         if "carriageway_separation" in data["road"]:
             flat["road_carriageway_separation"] = data["road"]["carriageway_separation"]
     
@@ -330,6 +335,31 @@ def _parse_spawn_rates_by_arm(
                 f"vehicle_spawn_rate_per_second_by_arm[{arm}] must be a non-negative number"
             )
         parsed[arm] = parsed_value
+    return parsed
+
+
+def _parse_stop_line_distance_by_arm(
+    data: Mapping[str, Any], *, arm_count: int, missing_arm: str | None
+) -> dict[str, int] | None:
+    if "stop_line_distance_by_arm" not in data:
+        return None
+    mapping = data["stop_line_distance_by_arm"]
+    if mapping is None:
+        return None
+    if not isinstance(mapping, dict):
+        raise ValueError("stop_line_distance_by_arm must be a mapping")
+    valid_arms = _topology_arms(arm_count=arm_count, missing_arm=missing_arm)
+    parsed: dict[str, int] = {}
+    for arm, value in mapping.items():
+        if not isinstance(arm, str):
+            raise ValueError("stop_line_distance_by_arm keys must be arm strings")
+        if arm not in valid_arms:
+            raise ValueError(f"unknown arm in stop_line_distance_by_arm: {arm}")
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"stop_line_distance_by_arm[{arm}] must be a non-negative integer")
+        if value < 0:
+            raise ValueError(f"stop_line_distance_by_arm[{arm}] must be non-negative")
+        parsed[arm] = value
     return parsed
 
 
@@ -592,6 +622,10 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         missing_arm=missing_arm,
     )
 
+    stop_line_distance_by_arm = _parse_stop_line_distance_by_arm(
+        data, arm_count=arm_count, missing_arm=missing_arm
+    )
+
     return RuntimeConfig(
         window_width=_parse_int(data, "window_width", minimum=1),
         window_height=_parse_int(data, "window_height", minimum=1),
@@ -603,6 +637,7 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
             data, "road_carriageway_separation", minimum=0
         ),
         stop_line_distance=_parse_int(data, "stop_line_distance", minimum=0),
+        stop_line_distance_by_arm=stop_line_distance_by_arm,
         green_duration_ticks=_parse_int(data, "green_duration_ticks", minimum=1),
         yellow_duration_ticks=_parse_int(data, "yellow_duration_ticks", minimum=1),
         simulation_ticks_per_second=_parse_int(data, "simulation_ticks_per_second", minimum=1),
@@ -648,6 +683,7 @@ def legacy_runtime_config() -> RuntimeConfig:
         road_lane_width=None,
         road_carriageway_separation=None,
         stop_line_distance=legacy_config.STOP_LINE_DISTANCE,
+        stop_line_distance_by_arm=None,
         green_duration_ticks=legacy_config.GREEN_DURATION_TICKS,
         yellow_duration_ticks=legacy_config.YELLOW_DURATION_TICKS,
         simulation_ticks_per_second=legacy_config.SIMULATION_TICKS_PER_SECOND,

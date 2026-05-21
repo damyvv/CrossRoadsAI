@@ -82,7 +82,7 @@ def build_intersection_geometry(
     carriageway_separation_override: int | None = None,
     outbound_lane_count: int = 2,
     outbound_lane_count_by_arm: Mapping[str, int] | None = None,
-    stop_line_distance: int,
+    stop_line_distance: int | Mapping[str, int],
 ) -> IntersectionGeometry:
     if arm_count not in {2, 3, 4}:
         raise ValueError("arm_count must be 2, 3, or 4")
@@ -182,9 +182,10 @@ def build_intersection_geometry(
     for name in arm_names:
         dx, dy = _ARM_DIRECTION[name]
 
+        arm_stop = stop_line_distance[name] if isinstance(stop_line_distance, Mapping) else stop_line_distance
         stop_line_center = (
-            cx + dx * stop_line_distance,
-            cy + dy * stop_line_distance,
+            cx + dx * arm_stop,
+            cy + dy * arm_stop,
         )
 
         position = _compute_arm_position(

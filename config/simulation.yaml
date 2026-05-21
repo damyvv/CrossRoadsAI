@@ -39,7 +39,12 @@ intersection:
 
 road:
   lane_width: 20
-  stop_line_distance: 70
+  stop_line_distance: 100
+  stop_line_distance_by_arm:
+    N: 60
+    E: 40
+    S: 60
+    W: 140
   # carriageway_separation: 40
 
 vehicle:

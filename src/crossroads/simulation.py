@@ -265,7 +265,7 @@ class IntersectionSimulation:
         arm_names: Sequence[str],
         window_width: int,
         window_height: int,
-        stop_line_distance: int,
+        stop_line_distance: int | Mapping[str, int],
         vehicle_flow: VehicleFlowConfig,
         spawn: TrafficSpawnConfig,
         controller: TrafficLightController,
@@ -283,7 +283,7 @@ class IntersectionSimulation:
                 arm=arm_name,
                 window_width=window_width,
                 window_height=window_height,
-                stop_line_distance=stop_line_distance,
+                stop_line_distance=(stop_line_distance[arm_name] if isinstance(stop_line_distance, Mapping) else stop_line_distance),
                 vehicle_length=vehicle_flow.length,
             )
             for arm_name in self._arm_names
