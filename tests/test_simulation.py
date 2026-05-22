@@ -1,5 +1,7 @@
 from math import hypot
 
+import pytest
+
 from crossroads.config import (
     GREEN_DURATION_TICKS,
     SIMULATION_TICKS_PER_SECOND,
@@ -15,7 +17,7 @@ from crossroads.config import (
     YELLOW_DURATION_TICKS,
 )
 from crossroads.intersection import build_intersection_geometry
-from crossroads.lane_paths import precompute_lane_paths
+from crossroads.lane_paths import LanePath, precompute_lane_paths
 from crossroads.simulation import (
     InboundLaneSpawnConfig,
     IntersectionSimulation,
@@ -568,3 +570,79 @@ def test_state_exposes_per_lane_light_states_for_each_inbound_lane():
 
     assert state.lane_counts_by_arm == {"N": 2}
     assert state.lane_light_states == {("N", 0): LightState.GREEN, ("N", 1): LightState.GREEN}
+
+
+def test_simulation_rejects_lane_paths_with_unknown_source_arm():
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
+    with pytest.raises(ValueError, match="unknown source arm"):
+        IntersectionSimulation(
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            stop_line_distance=STOP_LINE_DISTANCE,
+            vehicle_flow=VehicleFlowConfig(
+                top_speed=VEHICLE_TOP_SPEED,
+                acceleration=VEHICLE_ACCELERATION,
+                deceleration=VEHICLE_DECELERATION,
+                length=VEHICLE_LENGTH,
+                queue_gap=VEHICLE_QUEUE_GAP,
+                stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+            ),
+            spawn=TrafficSpawnConfig(
+                lambda_per_second=0.0,
+                ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+                seed=1,
+            ),
+            lane_paths_by_lane_movement={
+                ("X", 0, "straight"): LanePath(
+                    target_arm="S",
+                    target_outbound_lane_index=0,
+                    points=((0.0, 0.0), (1.0, 1.0)),
+                )
+            },
+        )
+
+
+def test_simulation_rejects_lane_paths_with_unknown_target_arm():
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
+    with pytest.raises(ValueError, match="unknown target arm"):
+        IntersectionSimulation(
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            stop_line_distance=STOP_LINE_DISTANCE,
+            vehicle_flow=VehicleFlowConfig(
+                top_speed=VEHICLE_TOP_SPEED,
+                acceleration=VEHICLE_ACCELERATION,
+                deceleration=VEHICLE_DECELERATION,
+                length=VEHICLE_LENGTH,
+                queue_gap=VEHICLE_QUEUE_GAP,
+                stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+            ),
+            spawn=TrafficSpawnConfig(
+                lambda_per_second=0.0,
+                ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+                seed=1,
+            ),
+            lane_paths_by_lane_movement={
+                ("N", 0, "straight"): LanePath(
+                    target_arm="X",
+                    target_outbound_lane_index=0,
+                    points=((0.0, 0.0), (1.0, 1.0)),
+                )
+            },
+        )

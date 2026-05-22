@@ -62,6 +62,7 @@ class _LanePathRuntime:
     lane_path: LanePath
     path_length: float
     target_post_exit_distance: float
+    cumulative_segment_lengths: tuple[float, ...]
 
 
 _INBOUND_DIRECTION_BY_ARM = {
@@ -82,15 +83,28 @@ def _path_length(*, points: tuple[tuple[float, float], ...]) -> float:
     return sum(hypot(end[0] - start[0], end[1] - start[1]) for start, end in zip(points, points[1:]))
 
 
-def _polyline_pose_at_distance(
+def _cumulative_segment_lengths(
     *,
     points: tuple[tuple[float, float], ...],
+) -> tuple[float, ...]:
+    cumulative: list[float] = []
+    total = 0.0
+    for start, end in zip(points, points[1:]):
+        total += hypot(end[0] - start[0], end[1] - start[1])
+        cumulative.append(total)
+    return tuple(cumulative)
+
+
+def _polyline_pose_at_distance(
+    *,
+    lane_path_runtime: _LanePathRuntime,
     distance: float,
 ) -> tuple[tuple[float, float], float]:
+    points = lane_path_runtime.lane_path.points
     if len(points) < 2:
         raise ValueError("lane path must contain at least two points")
-    segment_lengths = tuple(hypot(end[0] - start[0], end[1] - start[1]) for start, end in zip(points, points[1:]))
-    total_length = sum(segment_lengths)
+    cumulative_segment_lengths = lane_path_runtime.cumulative_segment_lengths
+    total_length = lane_path_runtime.path_length
     if total_length <= 0:
         raise ValueError("lane path must have positive length")
 
@@ -103,17 +117,18 @@ def _polyline_pose_at_distance(
         return points[-1], atan2(last_end[1] - last_start[1], last_end[0] - last_start[0])
 
     target_length = clamped_distance
-    traversed = 0.0
-    for index, length in enumerate(segment_lengths):
-        if traversed + length >= target_length:
-            if length == 0:
-                next_point = points[index + 1]
-                previous_point = points[index]
-                heading = atan2(next_point[1] - previous_point[1], next_point[0] - previous_point[0])
-                return next_point, heading
-            local_fraction = (target_length - traversed) / length
+    for index, cumulative_length in enumerate(cumulative_segment_lengths):
+        if cumulative_length >= target_length:
+            previous_cumulative = (
+                0.0 if index == 0 else cumulative_segment_lengths[index - 1]
+            )
+            length = cumulative_length - previous_cumulative
             start = points[index]
             end = points[index + 1]
+            if length == 0:
+                heading = atan2(end[1] - start[1], end[0] - start[0])
+                return end, heading
+            local_fraction = (target_length - previous_cumulative) / length
             heading = atan2(end[1] - start[1], end[0] - start[0])
             return (
                 (
@@ -122,7 +137,6 @@ def _polyline_pose_at_distance(
                 ),
                 heading,
             )
-        traversed += length
     last_start, last_end = points[-2], points[-1]
     return points[-1], atan2(last_end[1] - last_start[1], last_end[0] - last_start[0])
 
@@ -145,7 +159,7 @@ def _world_pose_on_lane_path(
 
     if vehicle.position <= vehicle.exit_distance:
         return _polyline_pose_at_distance(
-            points=lane_path.points,
+            lane_path_runtime=lane_path_runtime,
             distance=vehicle.position - vehicle.crossing_distance,
         )
 
@@ -405,6 +419,12 @@ class IntersectionSimulation:
             inbound_lanes_by_arm=spawn.inbound_lanes_by_arm,
         )
         self._spawn_random = Random(spawn.seed)
+        for key, lane_path in (lane_paths_by_lane_movement or {}).items():
+            source_arm, _, _ = key
+            if source_arm not in self._thresholds_by_arm:
+                raise ValueError(f"lane path key has unknown source arm: {source_arm!r}")
+            if lane_path.target_arm not in self._thresholds_by_arm:
+                raise ValueError(f"lane path has unknown target arm: {lane_path.target_arm!r}")
         self._lane_path_runtime_by_lane_movement = {
             key: _LanePathRuntime(
                 lane_path=lane_path,
@@ -413,6 +433,7 @@ class IntersectionSimulation:
                     self._thresholds_by_arm[lane_path.target_arm].discard
                     - self._thresholds_by_arm[lane_path.target_arm].crossing
                 ),
+                cumulative_segment_lengths=_cumulative_segment_lengths(points=lane_path.points),
             )
             for key, lane_path in (lane_paths_by_lane_movement or {}).items()
         }
