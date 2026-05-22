@@ -290,12 +290,12 @@ def _draw_lane_direction_markings(
                 dx, dy = direction
                 perp = (-dy, dx)
                 a = (
-                    tip[0] - (dx * (lane_width * 0.5)) + (perp[0] * (lane_width * 0.35)),
-                    tip[1] - (dy * (lane_width * 0.5)) + (perp[1] * (lane_width * 0.35)),
+                    tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) + (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
+                    tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) + (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
                 )
                 b = (
-                    tip[0] - (dx * (lane_width * 0.5)) - (perp[0] * (lane_width * 0.35)),
-                    tip[1] - (dy * (lane_width * 0.5)) - (perp[1] * (lane_width * 0.35)),
+                    tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) - (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
+                    tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) - (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
                 )
                 pygame.draw.polygon(surface, _MARKING_COLOR, (tip, a, b))
 

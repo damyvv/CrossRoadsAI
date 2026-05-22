@@ -72,6 +72,7 @@ _OPTIONAL_KEYS = {
     "stop_line_distance_by_arm",
     "_phases_data",
     "_inbound_lanes_data",
+    "road_lane_marker_scale",
 }
 _ALLOWED_KEYS = _REQUIRED_KEYS | _OPTIONAL_KEYS
 _VALID_ARMS_BY_COUNT = {

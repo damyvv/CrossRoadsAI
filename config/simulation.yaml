@@ -39,6 +39,7 @@ intersection:
 
 road:
   lane_width: 30
+  lane_marker_scale: 0.5
   stop_line_distance: 100
   stop_line_distance_by_arm:
     N: 60
