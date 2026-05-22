@@ -117,12 +117,21 @@ def _draw_vehicle(
     adj_y = center_y - world_window_height // 2 + world_y
 
     if world_heading_radians is not None:
-        vehicle_surface = pygame.Surface((vehicle_length, vehicle_width), pygame.SRCALPHA)
-        pygame.draw.rect(
-            vehicle_surface,
-            VEHICLE_COLOR,
-            pygame.Rect(0, 0, vehicle_length, vehicle_width),
-        )
+        cache = getattr(_draw_vehicle, "_base_surface_cache", None)
+        if cache is None:
+            cache = {}
+            setattr(_draw_vehicle, "_base_surface_cache", cache)
+        key = (vehicle_length, vehicle_width)
+        vehicle_surface = cache.get(key)
+        if vehicle_surface is None:
+            vehicle_surface = pygame.Surface((vehicle_length, vehicle_width), pygame.SRCALPHA)
+            pygame.draw.rect(
+                vehicle_surface,
+                VEHICLE_COLOR,
+                pygame.Rect(0, 0, vehicle_length, vehicle_width),
+            )
+            cache[key] = vehicle_surface
+
         rotated_surface = pygame.transform.rotate(
             vehicle_surface,
             -degrees(world_heading_radians),
@@ -131,6 +140,7 @@ def _draw_vehicle(
             center=(int(round(adj_x)), int(round(adj_y)))
         )
         surface.blit(rotated_surface, rotated_rect)
+        return
         return
 
     if arm in ("N", "S"):
