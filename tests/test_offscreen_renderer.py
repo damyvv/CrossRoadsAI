@@ -24,7 +24,7 @@ from crossroads.config import (
     YELLOW_DURATION_TICKS,
 )
 from crossroads.intersection import build_intersection_geometry
-from crossroads.renderer import render
+from crossroads.renderer import _draw_lane_direction_markings, render
 from crossroads.simulation import IntersectionSimulation, TrafficSpawnConfig, VehicleFlowConfig
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import default_four_way_phases
@@ -346,6 +346,46 @@ def test_offscreen_renderer_draws_lane_direction_markings_in_two_arm_topology():
     marker_y = south_stop_line_y + (lane_width * 2)
     pixel = surface.get_at((int(lane_x), int(marker_y)))
     assert pixel[0] > 150 and pixel[1] > 150 and pixel[2] > 150
+
+
+def test_lane_direction_arrow_head_is_not_double_offset_on_resized_surface():
+    lane_width = 12
+    road_width = 48
+    surface_width = WINDOW_WIDTH + 200
+    surface_height = WINDOW_HEIGHT + 100
+    surface = pygame.Surface((surface_width, surface_height))
+    surface.fill((0, 0, 0))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=road_width,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    _draw_lane_direction_markings(
+        surface=surface,
+        geometry=geometry,
+        lane_counts_by_arm={"N": 1, "E": 1, "S": 1, "W": 1},
+        lane_width=lane_width,
+        world_window_width=WINDOW_WIDTH,
+        world_window_height=WINDOW_HEIGHT,
+        inbound_lane_movements_by_arm={"N": (("straight",),)},
+        lane_marker_scale=1.0,
+        center_x=surface_width // 2,
+        center_y=surface_height // 2,
+    )
+
+    marked_pixels: list[tuple[int, int]] = []
+    for y in range(surface_height):
+        for x in range(surface_width):
+            if surface.get_at((x, y))[:3] != (0, 0, 0):
+                marked_pixels.append((x, y))
+
+    # A northbound straight marker should stay near its lane X coordinate after resize.
+    # If render offset is applied twice to arrowheads, marked pixels jump far right.
+    max_x = max(x for x, _ in marked_pixels)
+    assert max_x < 620
 
 
 def test_offscreen_renderer_draws_vehicles():

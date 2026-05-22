@@ -296,17 +296,15 @@ def _draw_lane_direction_markings(
             def _draw_arrow(tip: tuple[float, float], direction: tuple[float, float]) -> None:
                 dx, dy = direction
                 perp = (-dy, dx)
-                # Apply render offset to arrow coordinates
-                adjusted_tip = (tip[0] + render_offset_x, tip[1] + render_offset_y)
                 a = (
-                    adjusted_tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) + (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
-                    adjusted_tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) + (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
+                    tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) + (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
+                    tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) + (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
                 )
                 b = (
-                    adjusted_tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) - (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
-                    adjusted_tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) - (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
+                    tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) - (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
+                    tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) - (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
                 )
-                pygame.draw.polygon(surface, _MARKING_COLOR, (adjusted_tip, a, b))
+                pygame.draw.polygon(surface, _MARKING_COLOR, (tip, a, b))
 
             p0 = (
                marker_center[0] - (fx * marker_length * 0.5) + render_offset_x,
