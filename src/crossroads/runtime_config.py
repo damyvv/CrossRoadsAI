@@ -650,6 +650,10 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         data, arm_count=arm_count, missing_arm=missing_arm
     )
 
+    lane_marker_scale = _parse_optional_float(data, "road_lane_marker_scale", minimum=0.0)
+    if lane_marker_scale is None:
+        lane_marker_scale = 1.0
+
     return RuntimeConfig(
         window_width=_parse_int(data, "window_width", minimum=1),
         window_height=_parse_int(data, "window_height", minimum=1),
@@ -660,7 +664,7 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         road_carriageway_separation=_parse_optional_int(
             data, "road_carriageway_separation", minimum=0
         ),
-        road_lane_marker_scale=_parse_optional_float(data, "road_lane_marker_scale", minimum=0.0) or 1.0,
+        road_lane_marker_scale=lane_marker_scale,
         stop_line_distance=_parse_int(data, "stop_line_distance", minimum=0),
         stop_line_distance_by_arm=stop_line_distance_by_arm,
         green_duration_ticks=_parse_int(data, "green_duration_ticks", minimum=1),

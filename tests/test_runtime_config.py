@@ -127,6 +127,153 @@ def test_load_runtime_config_from_nested_yaml_rejects_negative_carriageway_separ
         load_runtime_config(config_path)
 
 
+def test_load_runtime_config_from_nested_yaml_defaults_lane_marker_scale(tmp_path):
+    """lane_marker_scale defaults to 1.0 when not specified."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  lane_width: 12",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    runtime_config = load_runtime_config(config_path)
+    assert runtime_config.road_lane_marker_scale == 1.0
+
+
+def test_load_runtime_config_from_nested_yaml_with_lane_marker_scale(tmp_path):
+    """lane_marker_scale can be set to a custom float value."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  lane_width: 12",
+                "  lane_marker_scale: 0.75",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    runtime_config = load_runtime_config(config_path)
+    assert runtime_config.road_lane_marker_scale == 0.75
+
+
+def test_load_runtime_config_from_nested_yaml_with_zero_lane_marker_scale(tmp_path):
+    """lane_marker_scale=0.0 should be accepted (not coerced to 1.0)."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  lane_width: 12",
+                "  lane_marker_scale: 0.0",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    runtime_config = load_runtime_config(config_path)
+    assert runtime_config.road_lane_marker_scale == 0.0
+
+
+def test_load_runtime_config_from_nested_yaml_rejects_negative_lane_marker_scale(tmp_path):
+    """lane_marker_scale must be >= 0."""
+    config_path = tmp_path / "simulation.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "window:",
+                "  width: 960",
+                "  height: 720",
+                "intersection:",
+                "  arm_count: 4",
+                "road:",
+                "  lane_width: 12",
+                "  lane_marker_scale: -0.5",
+                "  stop_line_distance: 70",
+                "vehicle:",
+                "  top_speed: 4.0",
+                "  acceleration: 0.2",
+                "  deceleration: 0.3",
+                "  length: 24",
+                "  width: 12",
+                "  queue_gap: 8",
+                "  stop_distance_before_line: 10.0",
+                "  spawn_rate_per_second: 2.0",
+                "simulation:",
+                "  green_duration_ticks: 150",
+                "  yellow_duration_ticks: 60",
+                "  ticks_per_second: 60",
+                "  vehicle_spawn_seed: 42",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="road_lane_marker_scale must be >= 0"):
+        load_runtime_config(config_path)
+
+
 def test_load_runtime_config_from_nested_yaml_rejects_non_mapping_section(tmp_path):
     """Nested YAML section must be a mapping, not a scalar."""
     config_path = tmp_path / "simulation.yaml"
