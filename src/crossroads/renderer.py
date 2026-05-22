@@ -412,6 +412,19 @@ def render(
         geometry: IntersectionGeometry with road and arm layout
         state: SimulationState with current vehicle and light positions
         average_wait_time: Average wait time in seconds for HUD display
+        world_window_width: Width in world units for the viewport (default: WINDOW_WIDTH)
+        world_window_height: Height in world units for the viewport (default: WINDOW_HEIGHT)
+        road_width: Width of road segments (default: ROAD_WIDTH)
+        lane_width: Width of lanes in pixels (default: VEHICLE_WIDTH)
+        vehicle_length: Length of vehicles in pixels (default: VEHICLE_LENGTH)
+        vehicle_width: Width of vehicles in pixels (default: VEHICLE_WIDTH)
+        outbound_lane_count_by_arm: Mapping of arm name to outbound lane count for drawing lane separations.
+            If None, no outbound lane markings are drawn. Keys should match arm names in geometry.
+        inbound_lane_movements_by_arm: Mapping of arm name to sequences of allowed movements per inbound lane
+            (e.g., {"N": [["straight", "left"], ["straight"]]}). If None, no lane direction markings are drawn.
+            Keys should match arm names in geometry. Each sequence length should match lane count for the arm.
+        lane_marker_scale: Scale multiplier for lane marker geometry (arrows and separations).
+            Default 1.0; use values < 1.0 to shrink markers, > 1.0 to enlarge them.
     """
     current_width, current_height = surface.get_size()
     center_x = current_width // 2
