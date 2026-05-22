@@ -245,11 +245,17 @@ def _draw_lane_direction_markings(
     world_window_height: int,
     inbound_lane_movements_by_arm: Mapping[str, Sequence[Sequence[str]]] | None,
     lane_marker_scale: float = 1.0,
+    center_x: int = 0,
+    center_y: int = 0,
 ) -> None:
     if inbound_lane_movements_by_arm is None:
         return
 
     forward_by_arm = {"N": (0.0, 1.0), "S": (0.0, -1.0), "E": (-1.0, 0.0), "W": (1.0, 0.0)}
+    
+    # Calculate render offset for world→surface translation
+    render_offset_x = center_x - world_window_width // 2
+    render_offset_y = center_y - world_window_height // 2
 
     for arm in geometry.arms:
         lane_count = lane_counts_by_arm.get(arm.name, 1)
@@ -290,23 +296,25 @@ def _draw_lane_direction_markings(
             def _draw_arrow(tip: tuple[float, float], direction: tuple[float, float]) -> None:
                 dx, dy = direction
                 perp = (-dy, dx)
+                # Apply render offset to arrow coordinates
+                adjusted_tip = (tip[0] + render_offset_x, tip[1] + render_offset_y)
                 a = (
-                    tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) + (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
-                    tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) + (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
+                    adjusted_tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) + (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
+                    adjusted_tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) + (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
                 )
                 b = (
-                    tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) - (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
-                    tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) - (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
+                    adjusted_tip[0] - (dx * (lane_width * 0.5 * lane_marker_scale)) - (perp[0] * (lane_width * 0.35 * lane_marker_scale)),
+                    adjusted_tip[1] - (dy * (lane_width * 0.5 * lane_marker_scale)) - (perp[1] * (lane_width * 0.35 * lane_marker_scale)),
                 )
-                pygame.draw.polygon(surface, _MARKING_COLOR, (tip, a, b))
+                pygame.draw.polygon(surface, _MARKING_COLOR, (adjusted_tip, a, b))
 
             p0 = (
-                marker_center[0] - (fx * marker_length * 0.5),
-                marker_center[1] - (fy * marker_length * 0.5),
+               marker_center[0] - (fx * marker_length * 0.5) + render_offset_x,
+               marker_center[1] - (fy * marker_length * 0.5) + render_offset_y,
             )
             p1 = (
-                marker_center[0] + (fx * marker_length * 0.5),
-                marker_center[1] + (fy * marker_length * 0.5),
+               marker_center[0] + (fx * marker_length * 0.5) + render_offset_x,
+               marker_center[1] + (fy * marker_length * 0.5) + render_offset_y,
             )
             movements = set(lane_movements[lane_index])
             if "straight" in movements:
@@ -314,8 +322,8 @@ def _draw_lane_direction_markings(
                 _draw_arrow(p1, (fx, fy))
             if "left" in movements:
                 pivot = (
-                    marker_center[0] + (fx * marker_length * 0.1),
-                    marker_center[1] + (fy * marker_length * 0.1),
+                   marker_center[0] + (fx * marker_length * 0.1) + render_offset_x,
+                   marker_center[1] + (fy * marker_length * 0.1) + render_offset_y,
                 )
                 left_tip = (
                     pivot[0] + (left[0] * branch_length),
@@ -326,8 +334,8 @@ def _draw_lane_direction_markings(
                 _draw_arrow(left_tip, left)
             if "right" in movements:
                 pivot = (
-                    marker_center[0] + (fx * marker_length * 0.1),
-                    marker_center[1] + (fy * marker_length * 0.1),
+                   marker_center[0] + (fx * marker_length * 0.1) + render_offset_x,
+                   marker_center[1] + (fy * marker_length * 0.1) + render_offset_y,
                 )
                 right_tip = (
                     pivot[0] + (right[0] * branch_length),
@@ -347,8 +355,15 @@ def _draw_lane_separation_markings(
     lane_width: int,
     world_window_width: int,
     world_window_height: int,
+    center_x: int = 0,
+    center_y: int = 0,
 ) -> None:
     cx, cy = geometry.center
+    
+    # Calculate render offset for world→surface translation
+    render_offset_x = center_x - world_window_width // 2
+    render_offset_y = center_y - world_window_height // 2
+    
     for arm in geometry.arms:
         lane_count = lane_counts_by_arm.get(arm.name, 1)
         outbound_count = (
@@ -359,33 +374,33 @@ def _draw_lane_separation_markings(
         for boundary_index in range(1, lane_count):
             offset = arm.inbound_lane_offset + (lane_width * boundary_index)
             if arm.name == "N":
-                x = cx - offset
-                start, end = (x, 0), (x, arm.stop_line[0][1])
+                x = cx - offset + render_offset_x
+                start, end = (x, 0 + render_offset_y), (x, arm.stop_line[0][1] + render_offset_y)
             elif arm.name == "S":
-                x = cx + offset
-                start, end = (x, arm.stop_line[0][1]), (x, world_window_height - 1)
+                x = cx + offset + render_offset_x
+                start, end = (x, arm.stop_line[0][1] + render_offset_y), (x, world_window_height - 1 + render_offset_y)
             elif arm.name == "E":
-                y = cy - offset
-                start, end = (arm.stop_line[0][0], y), (world_window_width - 1, y)
+                y = cy - offset + render_offset_y
+                start, end = (arm.stop_line[0][0] + render_offset_x, y), (world_window_width - 1 + render_offset_x, y)
             else:
-                y = cy + offset
-                start, end = (0, y), (arm.stop_line[0][0], y)
+                y = cy + offset + render_offset_y
+                start, end = (0 + render_offset_x, y), (arm.stop_line[0][0] + render_offset_x, y)
             _draw_dashed_line(surface, _MARKING_COLOR, start, end, width=2, dash_pattern=_LANE_MARKING_DASH_PATTERN)
 
         for boundary_index in range(1, outbound_count):
             offset = arm.outbound_lane_offset + (lane_width * boundary_index)
             if arm.name == "N":
-                x = cx + offset
-                start, end = (x, 0), (x, cy)
+                x = cx + offset + render_offset_x
+                start, end = (x, 0 + render_offset_y), (x, cy + render_offset_y)
             elif arm.name == "S":
-                x = cx - offset
-                start, end = (x, cy), (x, world_window_height - 1)
+                x = cx - offset + render_offset_x
+                start, end = (x, cy + render_offset_y), (x, world_window_height - 1 + render_offset_y)
             elif arm.name == "E":
-                y = cy + offset
-                start, end = (cx, y), (world_window_width - 1, y)
+                y = cy + offset + render_offset_y
+                start, end = (cx + render_offset_x, y), (world_window_width - 1 + render_offset_x, y)
             else:
-                y = cy - offset
-                start, end = (0, y), (cx, y)
+                y = cy - offset + render_offset_y
+                start, end = (0 + render_offset_x, y), (cx + render_offset_x, y)
             _draw_dashed_line(surface, _MARKING_COLOR, start, end, width=2, dash_pattern=_LANE_MARKING_DASH_PATTERN)
 
 
@@ -477,6 +492,8 @@ def render(
         lane_width=lane_width,
         world_window_width=world_window_width,
         world_window_height=world_window_height,
+        center_x=center_x,
+        center_y=center_y,
     )
 
     _draw_lane_direction_markings(
@@ -488,6 +505,8 @@ def render(
         world_window_height=world_window_height,
         inbound_lane_movements_by_arm=inbound_lane_movements_by_arm,
         lane_marker_scale=lane_marker_scale,
+        center_x=center_x,
+        center_y=center_y,
     )
 
     # Draw center mark
