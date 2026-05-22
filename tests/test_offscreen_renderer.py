@@ -367,6 +367,7 @@ def test_lane_direction_arrow_head_is_not_double_offset_on_resized_surface():
         surface=surface,
         geometry=geometry,
         lane_counts_by_arm={"N": 1, "E": 1, "S": 1, "W": 1},
+        road_width=road_width,
         lane_width=lane_width,
         world_window_width=WINDOW_WIDTH,
         world_window_height=WINDOW_HEIGHT,
