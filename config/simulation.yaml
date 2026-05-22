@@ -38,7 +38,7 @@ intersection:
           right: 0.5
 
 road:
-  lane_width: 20
+  lane_width: 30
   stop_line_distance: 100
   stop_line_distance_by_arm:
     N: 60

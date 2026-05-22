@@ -244,6 +244,7 @@ def _draw_lane_direction_markings(
     world_window_width: int,
     world_window_height: int,
     inbound_lane_movements_by_arm: Mapping[str, Sequence[Sequence[str]]] | None,
+    lane_marker_scale: float = 1.0,
 ) -> None:
     if inbound_lane_movements_by_arm is None:
         return
@@ -282,8 +283,8 @@ def _draw_lane_direction_markings(
             fx, fy = forward_by_arm[arm.name]
             left = (fy, -fx)
             right = (-fy, fx)
-            marker_length = lane_width * 1.6
-            branch_length = lane_width * 0.9
+            marker_length = lane_width * 1.6 * lane_marker_scale
+            branch_length = lane_width * 0.9 * lane_marker_scale
 
             def _draw_arrow(tip: tuple[float, float], direction: tuple[float, float]) -> None:
                 dx, dy = direction
@@ -401,6 +402,7 @@ def render(
     vehicle_width: int = VEHICLE_WIDTH,
     outbound_lane_count_by_arm: Mapping[str, int] | None = None,
     inbound_lane_movements_by_arm: Mapping[str, Sequence[Sequence[str]]] | None = None,
+    lane_marker_scale: float = 1.0,
 ) -> None:
     """
     Render the intersection simulation to a pygame surface.
@@ -471,6 +473,7 @@ def render(
         world_window_width=world_window_width,
         world_window_height=world_window_height,
         inbound_lane_movements_by_arm=inbound_lane_movements_by_arm,
+        lane_marker_scale=lane_marker_scale,
     )
 
     # Draw center mark

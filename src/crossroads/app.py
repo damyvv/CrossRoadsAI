@@ -158,6 +158,7 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
                 arm: tuple(lane.movements for lane in lanes)
                 for arm, lanes in runtime_config.inbound_lanes_by_arm.items()
             },
+            lane_marker_scale=runtime_config.road_lane_marker_scale,
         )
 
         simulation.advance_tick()
