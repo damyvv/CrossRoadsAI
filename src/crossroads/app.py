@@ -102,7 +102,7 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         controller=controller,
         window_width=runtime_config.window_width,
         window_height=runtime_config.window_height,
-        stop_line_distance=(runtime_config.stop_line_distance_by_arm if runtime_config.stop_line_distance_by_arm is not None else runtime_config.stop_line_distance),
+        stop_line_distance=geometry.effective_stop_line_distance_by_arm,
         vehicle_flow=VehicleFlowConfig(
             top_speed=runtime_config.vehicle_top_speed,
             acceleration=runtime_config.vehicle_acceleration,

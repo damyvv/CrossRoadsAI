@@ -117,7 +117,7 @@ def test_left_turn_from_north_rightmost_lane_targets_rightmost_outbound_lane():
     north_stop_line = next(arm.stop_line for arm in geometry.arms if arm.name == "N")
     (stop_start_x, stop_start_y), (stop_end_x, stop_end_y) = north_stop_line
     assert stop_start_y == stop_end_y
-    assert start[1] == float(stop_start_y)
+    assert math.isclose(start[1], float(stop_start_y), abs_tol=1e-9)
     assert min(stop_start_x, stop_end_x) <= start[0] <= max(stop_start_x, stop_end_x)
 
     # Quarter-turn radius equals horizontal/vertical offset from start to end.

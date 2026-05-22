@@ -48,6 +48,14 @@ _Avoid_: Phase switch, rotation step
 The line on an Arm where vehicles must wait when the Light State is not Green.
 _Avoid_: Holding line, wait line
 
+**Intersection Rectangle**:
+The rectangular area whose four sides are the Stop Lines of the N, E, S, and W Arms, sized so each Stop Line aligns with the outer road edges of its two perpendicular neighbor Arms.
+_Avoid_: Intersection box, crossing area
+
+**Stop Line Base**:
+The auto-calculated component of a Stop Line's distance from the intersection center, equal to the maximum road extent of all present Arms on the perpendicular axis. Forms the basis of the Intersection Rectangle before any manual offset is applied.
+_Avoid_: Auto distance, base distance
+
 **Vehicle**:
 A simulated road user that traverses an Arm toward and through an Intersection.
 _Avoid_: Car entity, sprite
@@ -115,6 +123,9 @@ _Avoid_: Cleanup state, delete state
 - A **Phase Handoff** occurs when the active **Phase** reaches Red
 - A **Phase Handoff** may include a **Clearance Interval** before the next **Signal Group** turns Green
 - Each **Arm** has one **Stop Line**
+- The **Stop Line Base** for each **Arm** is derived from the maximum road extent of perpendicular **Arms**
+- The four **Stop Lines** of a four-Arm **Intersection** define the **Intersection Rectangle**
+- A **Stop Line**'s final position equals its **Stop Line Base** plus a manual per-Arm offset
 - Each **Arm** has an **Inbound Lane** determined by **Driving Side**
 - Each **Arm** defines one **Inbound Lane Ordering**
 - Each **Inbound Lane** has one **Lane Centerline**
@@ -146,4 +157,4 @@ _Avoid_: Cleanup state, delete state
 - "traffic light per lane" was interpreted as either independent or coordinated control — resolved: model lanes under coordinated **Signal Groups**.
 - "all-red time" overlapped with yellow semantics — resolved: use **Clearance Interval** for inter-group red-only time.
 - "intent" was used as both configurable options and runtime choice — resolved: use **Lane Movement Set** for options and **Committed Movement** for per-vehicle choice.
-- "Arm" implied single-lane flow while planning multi-lane support — resolved: **Arm** contains lane groups, not single lanes.
+- "stop_line_distance_by_arm" was used as an absolute distance from center — resolved: it is now a per-Arm extra offset added on top of the auto-calculated **Stop Line Base**.

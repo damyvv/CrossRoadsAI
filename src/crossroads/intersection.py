@@ -21,6 +21,7 @@ class IntersectionGeometry:
     arms: list[ArmGeometry]
     road_rects: list[tuple[int, int, int, int]]
     arm_center_lines: list[tuple[tuple[int, int], tuple[int, int]]]
+    effective_stop_line_distance_by_arm: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -179,11 +180,27 @@ def build_intersection_geometry(
 
     arms = []
     center_lines = []
+    effective_stop_line_distance_by_arm: dict[str, int] = {}
+
+    if not legacy_mode:
+        stop_line_base_by_arm = _compute_stop_line_base_by_arm(
+            arm_names=arm_names,
+            inbound_width_by_arm=inbound_width_by_arm,
+            outbound_width_by_arm=outbound_width_by_arm,
+            carriageway_separation_by_arm=effective_carriageway_separation_by_arm,
+            carriageway_separation_override_component=carriageway_override_component,
+        )
 
     for name in arm_names:
         dx, dy = _ARM_DIRECTION[name]
 
-        arm_stop = stop_line_distance[name] if isinstance(stop_line_distance, Mapping) else stop_line_distance
+        offset = stop_line_distance[name] if isinstance(stop_line_distance, Mapping) else stop_line_distance
+        if not legacy_mode:
+            arm_stop = stop_line_base_by_arm[name] + offset
+        else:
+            arm_stop = offset
+        effective_stop_line_distance_by_arm[name] = arm_stop
+
         stop_line_center = (
             cx + dx * arm_stop,
             cy + dy * arm_stop,
@@ -249,6 +266,7 @@ def build_intersection_geometry(
         arms=arms,
         road_rects=road_rects,
         arm_center_lines=center_lines,
+        effective_stop_line_distance_by_arm=effective_stop_line_distance_by_arm,
     )
 
 
@@ -452,6 +470,47 @@ def _auto_carriageway_separation_for_arm(
 
     required = 2.0 * lane_width * (inbound_reference - outbound_reference)
     return max(0, int(ceil(required)))
+
+
+def _compute_stop_line_base_by_arm(
+    *,
+    arm_names: Sequence[str],
+    inbound_width_by_arm: Mapping[str, int],
+    outbound_width_by_arm: Mapping[str, int],
+    carriageway_separation_by_arm: Mapping[str, int],
+    carriageway_separation_override_component: int,
+) -> dict[str, int]:
+    """Compute the auto Stop Line Base for each arm.
+
+    The base equals half the total physical width of the widest perpendicular arm.
+    N/S base = max(E/W arm physical widths) // 2.
+    E/W base = max(N/S arm physical widths) // 2.
+    Returns 0 for an axis when no perpendicular arms exist (e.g. 2-arm N/S only).
+    Using half the total physical width keeps the intersection rectangle centered
+    at (cx, cy) and ensures the E<->W gap equals the widest N/S arm width.
+    """
+    arm_names_set = set(arm_names)
+    ns_arms = [a for a in ("N", "S") if a in arm_names_set]
+    ew_arms = [a for a in ("E", "W") if a in arm_names_set]
+
+    def arm_physical_width(arm: str) -> int:
+        neg_gap, pos_gap = _split_carriageway_gap_for_arm(
+            arm=arm,
+            carriageway_separation=carriageway_separation_by_arm[arm],
+            legacy_mode=False,
+            carriageway_separation_override_component=carriageway_separation_override_component,
+        )
+        inbound_w = inbound_width_by_arm[arm]
+        outbound_w = outbound_width_by_arm[arm]
+        return neg_gap + inbound_w + pos_gap + outbound_w
+
+    ns_base = max((arm_physical_width(a) for a in ew_arms), default=0) // 2
+    ew_base = max((arm_physical_width(a) for a in ns_arms), default=0) // 2
+
+    return {
+        arm: (ns_base if arm in {"N", "S"} else ew_base)
+        for arm in arm_names
+    }
 
 
 def _opposite_arm_name(arm: str) -> str | None:

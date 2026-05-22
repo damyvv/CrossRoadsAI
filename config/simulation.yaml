@@ -40,12 +40,12 @@ intersection:
 road:
   lane_width: 30
   lane_marker_scale: 0.5
-  stop_line_distance: 100
-  stop_line_distance_by_arm:
-    N: 60
-    E: 40
-    S: 60
-    W: 140
+  stop_line_distance: 0
+  # stop_line_distance_by_arm:
+  #   N: 0
+  #   E: 0
+  #   S: 0
+  #   W: 0
   # carriageway_separation: 40
 
 vehicle:

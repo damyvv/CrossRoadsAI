@@ -246,23 +246,25 @@ def test_build_intersection_geometry_uses_per_arm_width_and_inbound_stop_line_sp
         inbound_lane_count_by_arm={"N": 5, "E": 2, "S": 3, "W": 2},
         lane_width=lane_width,
         outbound_lane_count=2,
-        stop_line_distance=STOP_LINE_DISTANCE,
+        stop_line_distance=0,
     )
 
     cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
     north_arm = geometry.arms[0]
     south_arm = geometry.arms[2]
-    assert north_arm.center_line[1] == (cx, cy - STOP_LINE_DISTANCE)
-    assert south_arm.center_line[1] == (cx, cy + STOP_LINE_DISTANCE)
+    # Auto base for N/S: max E/W extent = max(inbound_E=24, outbound_E=24, ...) = 24
+    ns_base = 24
+    assert north_arm.center_line[1] == (cx, cy - ns_base)
+    assert south_arm.center_line[1] == (cx, cy + ns_base)
     # N inbound is west side, length = 5 lanes * lane_width.
     assert north_arm.stop_line == (
-        (cx, cy - STOP_LINE_DISTANCE),
-        (cx - (5 * lane_width), cy - STOP_LINE_DISTANCE),
+        (cx, cy - ns_base),
+        (cx - (5 * lane_width), cy - ns_base),
     )
     # S inbound is east side, length = 3 lanes * lane_width.
     assert south_arm.stop_line == (
-        (cx, cy + STOP_LINE_DISTANCE),
-        (cx + (3 * lane_width), cy + STOP_LINE_DISTANCE),
+        (cx, cy + ns_base),
+        (cx + (3 * lane_width), cy + ns_base),
     )
 
 
@@ -293,7 +295,7 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
         lane_width=lane_width,
         carriageway_separation_override=carriageway_separation,
         outbound_lane_count=2,
-        stop_line_distance=STOP_LINE_DISTANCE,
+        stop_line_distance=0,
     )
 
     cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
@@ -301,14 +303,16 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
     south_arm = geometry.arms[2]
     expected_north_offset = (5 * lane_width) + carriageway_separation // 2
     expected_south_offset = (3 * lane_width) + carriageway_separation // 2
+    # Auto base for N/S: E/W arm extent with sep=10 (all override, evenly split) = 24 + 5 = 29
+    ns_base = 29
 
     assert north_arm.stop_line == (
-        (cx - carriageway_separation // 2, cy - STOP_LINE_DISTANCE),
-        (cx - expected_north_offset, cy - STOP_LINE_DISTANCE),
+        (cx - carriageway_separation // 2, cy - ns_base),
+        (cx - expected_north_offset, cy - ns_base),
     )
     assert south_arm.stop_line == (
-        (cx + carriageway_separation // 2, cy + STOP_LINE_DISTANCE),
-        (cx + expected_south_offset, cy + STOP_LINE_DISTANCE),
+        (cx + carriageway_separation // 2, cy + ns_base),
+        (cx + expected_south_offset, cy + ns_base),
     )
 
 
@@ -470,3 +474,194 @@ def test_build_intersection_geometry_removes_centerline_only_for_separated_arms(
 
     # Only N has positive separation in this setup.
     assert len(geometry.arm_center_lines) == 3
+
+
+# ---------------------------------------------------------------------------
+# Auto Stop Line Base / Intersection Rectangle tests
+# ---------------------------------------------------------------------------
+
+def test_stop_line_base_auto_aligns_with_perpendicular_arm_edges():
+    """N/S stop lines land at outer edge of E/W roads; E/W at outer edge of N/S roads."""
+    lane_width = 10
+    # 2 inbound + 2 outbound per arm, no carriageway separation → arm extent = 20
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=4,
+        road_width_by_arm={"N": 40, "E": 40, "S": 40, "W": 40},
+        inbound_lane_count_by_arm={"N": 2, "E": 2, "S": 2, "W": 2},
+        outbound_lane_count=2,
+        lane_width=lane_width,
+        stop_line_distance=0,
+    )
+
+    cx, cy = 100, 100
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    assert by_arm["N"].stop_line[0][1] == cy - 20
+    assert by_arm["S"].stop_line[0][1] == cy + 20
+    assert by_arm["E"].stop_line[0][0] == cx + 20
+    assert by_arm["W"].stop_line[0][0] == cx - 20
+
+
+def test_stop_line_base_uses_half_of_widest_perpendicular_arm_physical_width():
+    """E/W base = widest N/S arm total physical width // 2 (not max of a single-side extent)."""
+    lane_width = 10
+    # N: 1 inbound (10) + 3 outbound (30), sep=0 → total physical width = 40
+    # S: 1 inbound (10) + 1 outbound (10), sep=0 → total = 20
+    # E/W: 1 inbound + 1 outbound → total = 20
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=4,
+        road_width_by_arm={"N": 40, "E": 20, "S": 20, "W": 20},
+        inbound_lane_count_by_arm={"N": 1, "E": 1, "S": 1, "W": 1},
+        outbound_lane_count_by_arm={"N": 3, "E": 1, "S": 1, "W": 1},
+        lane_width=lane_width,
+        stop_line_distance=0,
+    )
+
+    cx, cy = 100, 100
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    # E/W base = max(N_total=40, S_total=20) // 2 = 20  (gap = 40 = N arm width)
+    assert by_arm["E"].stop_line[0][0] == cx + 20
+    assert by_arm["W"].stop_line[0][0] == cx - 20
+    assert geometry.effective_stop_line_distance_by_arm["E"] + geometry.effective_stop_line_distance_by_arm["W"] == 40
+    # N/S base = max(E_total=20, W_total=20) // 2 = 10
+    assert by_arm["N"].stop_line[0][1] == cy - 10
+    assert by_arm["S"].stop_line[0][1] == cy + 10
+
+
+def test_stop_line_distance_adds_as_offset_on_top_of_auto_base():
+    """stop_line_distance is an extra offset added to the auto-calculated base."""
+    lane_width = 10
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=4,
+        road_width_by_arm={"N": 40, "E": 40, "S": 40, "W": 40},
+        inbound_lane_count_by_arm={"N": 2, "E": 2, "S": 2, "W": 2},
+        outbound_lane_count=2,
+        lane_width=lane_width,
+        stop_line_distance=15,
+    )
+
+    cx, cy = 100, 100
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    # Auto base = 20, offset = 15 → effective = 35
+    assert by_arm["N"].stop_line[0][1] == cy - 35
+    assert by_arm["S"].stop_line[0][1] == cy + 35
+    assert by_arm["E"].stop_line[0][0] == cx + 35
+    assert by_arm["W"].stop_line[0][0] == cx - 35
+
+
+def test_stop_line_per_arm_mapping_overrides_global_offset():
+    """A per-arm mapping overrides the global offset for that arm; auto base still applies."""
+    lane_width = 10
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=4,
+        road_width_by_arm={"N": 40, "E": 40, "S": 40, "W": 40},
+        inbound_lane_count_by_arm={"N": 2, "E": 2, "S": 2, "W": 2},
+        outbound_lane_count=2,
+        lane_width=lane_width,
+        stop_line_distance={"N": 5, "E": 0, "S": 5, "W": 0},
+    )
+
+    cx, cy = 100, 100
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    # Auto base = 20; N/S get +5, E/W get +0
+    assert by_arm["N"].stop_line[0][1] == cy - 25
+    assert by_arm["S"].stop_line[0][1] == cy + 25
+    assert by_arm["E"].stop_line[0][0] == cx + 20
+    assert by_arm["W"].stop_line[0][0] == cx - 20
+
+
+def test_stop_line_base_three_arm_uses_only_existing_perpendicular_arms():
+    """3-arm intersection: E/W base uses only S (no N); S base uses both E and W."""
+    lane_width = 10
+    # S: 3 inbound (30) + 2 outbound (20) → total physical width = 50
+    # E/W: 1 inbound (10) + 1 outbound (10) → total = 20
+    # E/W base = max(S_total=50) // 2 = 25 → E<->W gap = 50 = S arm width
+    # S base from E/W: total = 20 → 20 // 2 = 10
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=3,
+        missing_arm="N",
+        road_width_by_arm={"E": 20, "S": 50, "W": 20},
+        inbound_lane_count_by_arm={"E": 1, "S": 3, "W": 1},
+        outbound_lane_count_by_arm={"E": 1, "S": 2, "W": 1},
+        lane_width=lane_width,
+        stop_line_distance=0,
+    )
+
+    cx, cy = 100, 100
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    assert by_arm["E"].stop_line[0][0] == cx + 25
+    assert by_arm["W"].stop_line[0][0] == cx - 25
+    assert by_arm["S"].stop_line[0][1] == cy + 10
+
+
+def test_stop_line_base_two_arm_is_zero_so_offset_is_the_full_distance():
+    """2-arm (N+S only): no E/W arms → zero auto base, stop_line_distance is the full distance."""
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=2,
+        road_width_by_arm={"N": 40, "S": 40},
+        inbound_lane_count_by_arm={"N": 2, "S": 2},
+        outbound_lane_count=2,
+        lane_width=10,
+        stop_line_distance=30,
+    )
+
+    cy = 100
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    assert by_arm["N"].stop_line[0][1] == cy - 30
+    assert by_arm["S"].stop_line[0][1] == cy + 30
+
+
+def test_effective_stop_line_distance_by_arm_exposed_on_geometry():
+    """IntersectionGeometry exposes the total (base + offset) per arm."""
+    lane_width = 10
+    geometry = build_intersection_geometry(
+        window_width=200,
+        window_height=200,
+        arm_count=4,
+        road_width_by_arm={"N": 40, "E": 40, "S": 40, "W": 40},
+        inbound_lane_count_by_arm={"N": 2, "E": 2, "S": 2, "W": 2},
+        outbound_lane_count=2,
+        lane_width=lane_width,
+        stop_line_distance=7,
+    )
+
+    # Base = 20, offset = 7 → effective = 27 for all arms
+    assert geometry.effective_stop_line_distance_by_arm == {
+        "N": 27, "E": 27, "S": 27, "W": 27
+    }
+
+
+def test_ew_stop_line_gap_equals_widest_ns_arm_physical_width():
+    """E<->W stop line distance = widest N/S arm total physical width (not 2x max single extent)."""
+    lane_width = 30
+    # N: 6 inbound (180) + 1 outbound (30), sep=0 → physical width = 210
+    # S: 1 inbound (30) + 3 outbound (90), sep=0 → physical width = 120
+    # E/W: 2 inbound (60) + 2 outbound (60), sep=0 → physical width = 120
+    geometry = build_intersection_geometry(
+        window_width=960,
+        window_height=720,
+        arm_count=4,
+        road_width_by_arm={"N": 210, "E": 120, "S": 120, "W": 120},
+        inbound_lane_count_by_arm={"N": 6, "E": 2, "S": 1, "W": 2},
+        outbound_lane_count_by_arm={"N": 1, "E": 2, "S": 3, "W": 2},
+        lane_width=lane_width,
+        stop_line_distance=0,
+    )
+
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    e_dist = geometry.effective_stop_line_distance_by_arm["E"]
+    w_dist = geometry.effective_stop_line_distance_by_arm["W"]
+    ew_gap = e_dist + w_dist
+    assert ew_gap == 210, f"E<->W gap {ew_gap} != widest N/S arm width 210"
+    assert e_dist == w_dist, f"E and W should have same base: {e_dist} vs {w_dist}"

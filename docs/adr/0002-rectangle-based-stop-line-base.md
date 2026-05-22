@@ -1,0 +1,5 @@
+# Rectangle-based auto-calculation of Stop Line Base
+
+Stop Line distances are auto-calculated from the outer road edges of perpendicular Arms rather than being specified as absolute values. The Stop Line Base for N/S Arms equals the maximum road extent of all present E/W Arms from the center (and vice versa), forming the Intersection Rectangle. The `stop_line_distance` and `stop_line_distance_by_arm` config fields are additive offsets on top of this base, defaulting to zero for a clean rectangle. Opposing Arms (N↔S, E↔W) share the same base so vehicle crossing/exit thresholds remain symmetric. For 3-arm intersections the base uses only the present Arms on the perpendicular axis; for 2-arm (N/S only) the base is zero and the manual offset is the full distance.
+
+The alternative — fully manual absolute values — required hand-tuning to compensate for varying lane counts across Arms and produced a visually broken intersection whenever lane counts differed. The auto-base approach makes the correct layout the default and reserves the offset for intentional adjustments.
