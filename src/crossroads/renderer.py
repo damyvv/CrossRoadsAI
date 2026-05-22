@@ -260,6 +260,7 @@ def _draw_lane_direction_markings(
         stop_x, stop_y = arm.stop_line[0]
         marker_offset = lane_width * 2.0
         for lane_index in range(min(lane_count, len(lane_movements))):
+            # road_width is unused since lane_width is explicitly provided; use 1 as placeholder
             lane_center_x, lane_center_y = lane_center_world_position(
                 arm=arm.name,
                 distance=0.0,
