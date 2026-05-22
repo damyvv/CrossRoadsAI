@@ -27,6 +27,7 @@ intersection:
           left: 0.34
           straight: 0.33
           right: 0.33
+      - movements: [right]
     W:
       - movements: [left, straight]
         movement_probabilities:
@@ -46,7 +47,7 @@ road:
   #   E: 0
   #   S: 0
   #   W: 0
-  # carriageway_separation: 40
+  carriageway_separation: 0
 
 vehicle:
   top_speed: 4.0

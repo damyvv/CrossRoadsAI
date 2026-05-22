@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from math import sqrt
+from math import isfinite, sqrt
 
 
 class VehicleState(Enum):
@@ -186,8 +186,8 @@ def lane_center_world_position(
         raise ValueError("lane_width must be positive")
     if carriageway_separation < 0:
         raise ValueError("carriageway_separation must be non-negative")
-    if inbound_lane_offset is not None and inbound_lane_offset < 0:
-        raise ValueError("inbound_lane_offset must be non-negative")
+    if inbound_lane_offset is not None and not isfinite(inbound_lane_offset):
+        raise ValueError("inbound_lane_offset must be finite")
 
     cx = window_width // 2
     cy = window_height // 2

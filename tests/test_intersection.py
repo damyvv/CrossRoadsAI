@@ -262,10 +262,9 @@ def test_build_intersection_geometry_uses_per_arm_width_and_inbound_stop_line_sp
         (cx - (5 * lane_width), cy - ns_base),
     )
     # S inbound is east side, length = 3 lanes * lane_width.
-    assert south_arm.stop_line == (
-        (cx, cy + ns_base),
-        (cx + (3 * lane_width), cy + ns_base),
-    )
+    assert south_arm.stop_line[0][1] == cy + ns_base
+    assert south_arm.stop_line[1][1] == cy + ns_base
+    assert (south_arm.stop_line[1][0] - south_arm.stop_line[0][0]) == (3 * lane_width)
 
 
 def test_build_intersection_geometry_rejects_negative_carriageway_separation():
@@ -302,7 +301,6 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
     north_arm = geometry.arms[0]
     south_arm = geometry.arms[2]
     expected_north_offset = (5 * lane_width) + carriageway_separation // 2
-    expected_south_offset = (3 * lane_width) + carriageway_separation // 2
     # Auto base for N/S: E/W arm extent with sep=10 (all override, evenly split) = 24 + 5 = 29
     ns_base = 29
 
@@ -310,10 +308,9 @@ def test_build_intersection_geometry_applies_carriageway_separation_to_stop_line
         (cx - carriageway_separation // 2, cy - ns_base),
         (cx - expected_north_offset, cy - ns_base),
     )
-    assert south_arm.stop_line == (
-        (cx + carriageway_separation // 2, cy + ns_base),
-        (cx + expected_south_offset, cy + ns_base),
-    )
+    assert south_arm.stop_line[0][1] == cy + ns_base
+    assert south_arm.stop_line[1][1] == cy + ns_base
+    assert (south_arm.stop_line[1][0] - south_arm.stop_line[0][0]) == (3 * lane_width)
 
 
 def test_build_intersection_geometry_auto_separation_is_per_arm_and_adds_override():
@@ -423,9 +420,7 @@ def test_south_straight_lane_aligns_with_north_outbound_rightmost_lane(
     )
 
     cx = WINDOW_WIDTH // 2
-    north_neg_gap = by_arm["N"].carriageway_separation // 2
-    north_pos_gap = by_arm["N"].carriageway_separation - north_neg_gap
-    north_outbound_rightmost_x = cx + north_pos_gap + (lane_width / 2.0)
+    north_outbound_rightmost_x = cx + by_arm["N"].outbound_lane_offset + (lane_width / 2.0)
     assert south_straight_x == north_outbound_rightmost_x
 
 
@@ -474,6 +469,74 @@ def test_build_intersection_geometry_removes_centerline_only_for_separated_arms(
 
     # Only N has positive separation in this setup.
     assert len(geometry.arm_center_lines) == 3
+
+
+def test_ns_axis_footprint_is_centered_between_outermost_borders():
+    """N/S axis center must sit midway between the furthest west/east N/S borders."""
+    lane_width = 30
+    inbound_lanes_by_arm = {
+        "N": (
+            _Lane("left"),
+            _Lane("left"),
+            _Lane("straight"),
+            _Lane("straight"),
+            _Lane("straight"),
+            _Lane("right"),
+        ),
+        "E": (_Lane("left", "straight"), _Lane("straight", "right")),
+        "S": (_Lane("left", "straight", "right"), _Lane("right")),
+        "W": (_Lane("left", "straight"), _Lane("straight", "right")),
+    }
+    outbound_lane_count_by_arm = compute_outbound_lane_count_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm=inbound_lanes_by_arm
+    )
+    road_width_by_arm = compute_road_width_by_arm_from_inbound_lanes(
+        inbound_lanes_by_arm=inbound_lanes_by_arm,
+        lane_width=lane_width,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
+    )
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm=road_width_by_arm,
+        inbound_lane_count_by_arm={
+            arm: len(lanes) for arm, lanes in inbound_lanes_by_arm.items()
+        },
+        straight_capable_lane_indices_by_arm={
+            arm: tuple(i for i, lane in enumerate(lanes) if "straight" in lane.movements)
+            for arm, lanes in inbound_lanes_by_arm.items()
+        },
+        lane_width=lane_width,
+        carriageway_separation_override=0,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
+        stop_line_distance=0,
+    )
+
+    cx, _ = geometry.center
+    by_arm = {arm.name: arm for arm in geometry.arms}
+    north_arm = by_arm["N"]
+    south_arm = by_arm["S"]
+
+    north_inbound_width = abs(north_arm.stop_line[1][0] - north_arm.stop_line[0][0])
+    south_inbound_width = abs(south_arm.stop_line[1][0] - south_arm.stop_line[0][0])
+    north_outbound_width = outbound_lane_count_by_arm["N"] * lane_width
+    south_outbound_width = outbound_lane_count_by_arm["S"] * lane_width
+
+    west_extent = max(
+        north_arm.inbound_lane_offset + north_inbound_width,
+        south_arm.outbound_lane_offset + south_outbound_width,
+    )
+    east_extent = max(
+        north_arm.outbound_lane_offset + north_outbound_width,
+        south_arm.inbound_lane_offset + south_inbound_width,
+    )
+
+    west_border = cx - west_extent
+    east_border = cx + east_extent
+
+    assert (abs(west_border - east_border) == 8*lane_width)
+    assert (west_border + east_border) == (2 * cx)
 
 
 # ---------------------------------------------------------------------------

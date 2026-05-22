@@ -177,6 +177,30 @@ def build_intersection_geometry(
         effective_carriageway_separation_by_arm = {
             arm: carriageway_override_component for arm in arm_names
         }
+    base_carriageway_gap_by_arm = _derive_effective_carriageway_gaps_by_arm(
+        arm_names=arm_names,
+        inbound_width_by_arm=inbound_width_by_arm,
+        outbound_width_by_arm=outbound_width_by_arm,
+        carriageway_separation_by_arm=effective_carriageway_separation_by_arm,
+        legacy_mode=legacy_mode,
+        carriageway_separation_override_component=carriageway_override_component,
+        center_ns_outer_borders=False,
+    )
+    effective_carriageway_gap_by_arm = _derive_effective_carriageway_gaps_by_arm(
+        arm_names=arm_names,
+        inbound_width_by_arm=inbound_width_by_arm,
+        outbound_width_by_arm=outbound_width_by_arm,
+        carriageway_separation_by_arm=effective_carriageway_separation_by_arm,
+        legacy_mode=legacy_mode,
+        carriageway_separation_override_component=carriageway_override_component,
+        center_ns_outer_borders=(
+            not legacy_mode
+            and _all_stop_line_offsets_zero(
+                stop_line_distance=stop_line_distance,
+                arm_names=arm_names,
+            )
+        ),
+    )
 
     arms = []
     center_lines = []
@@ -187,8 +211,7 @@ def build_intersection_geometry(
             arm_names=arm_names,
             inbound_width_by_arm=inbound_width_by_arm,
             outbound_width_by_arm=outbound_width_by_arm,
-            carriageway_separation_by_arm=effective_carriageway_separation_by_arm,
-            carriageway_separation_override_component=carriageway_override_component,
+            carriageway_gap_by_arm=base_carriageway_gap_by_arm,
         )
 
     for name in arm_names:
@@ -212,21 +235,14 @@ def build_intersection_geometry(
 
         center_line = (position, stop_line_center)
 
+        negative_gap, positive_gap = effective_carriageway_gap_by_arm[name]
         stop_line = _compute_stop_line(
-            arm_name=name,
             center_point=stop_line_center,
             dx=dx,
             dy=dy,
             inbound_width=inbound_width_by_arm[name],
-            carriageway_separation=effective_carriageway_separation_by_arm[name],
-            legacy_mode=legacy_mode,
-            carriageway_separation_override_component=carriageway_override_component,
-        )
-        negative_gap, positive_gap = _split_carriageway_gap_for_arm(
-            arm=name,
-            carriageway_separation=effective_carriageway_separation_by_arm[name],
-            legacy_mode=legacy_mode,
-            carriageway_separation_override_component=carriageway_override_component,
+            negative_gap=negative_gap,
+            positive_gap=positive_gap,
         )
         inbound_lane_offset = negative_gap if name in {"N", "E"} else positive_gap
         outbound_lane_offset = positive_gap if name in {"N", "E"} else negative_gap
@@ -256,8 +272,7 @@ def build_intersection_geometry(
         inbound_width_by_arm=inbound_width_by_arm,
         outbound_width_by_arm=outbound_width_by_arm,
         legacy_mode=legacy_mode,
-        carriageway_separation_by_arm=effective_carriageway_separation_by_arm,
-        carriageway_separation_override_component=carriageway_override_component,
+        carriageway_gap_by_arm=effective_carriageway_gap_by_arm,
         road_width=road_width,
     )
 
@@ -279,6 +294,16 @@ def _resolve_arm_names(*, arm_count: int, missing_arm: str | None) -> list[str]:
     return ["N", "S"]
 
 
+def _all_stop_line_offsets_zero(
+    *,
+    stop_line_distance: int | Mapping[str, int],
+    arm_names: Sequence[str],
+) -> bool:
+    if isinstance(stop_line_distance, Mapping):
+        return all(stop_line_distance[arm] == 0 for arm in arm_names)
+    return stop_line_distance == 0
+
+
 def _build_road_rects(
     *,
     arm_count: int,
@@ -291,8 +316,7 @@ def _build_road_rects(
     inbound_width_by_arm: Mapping[str, int],
     outbound_width_by_arm: Mapping[str, int],
     legacy_mode: bool,
-    carriageway_separation_by_arm: Mapping[str, int],
-    carriageway_separation_override_component: int,
+    carriageway_gap_by_arm: Mapping[str, tuple[int, int]],
     road_width: int | None,
 ) -> list[tuple[int, int, int, int]]:
     if legacy_mode:
@@ -328,12 +352,7 @@ def _build_road_rects(
     _ = (arm_count, missing_arm)
     road_rects: list[tuple[int, int, int, int]] = []
     for arm in arm_names:
-        negative_gap, positive_gap = _split_carriageway_gap_for_arm(
-            arm=arm,
-            carriageway_separation=carriageway_separation_by_arm[arm],
-            legacy_mode=legacy_mode,
-            carriageway_separation_override_component=carriageway_separation_override_component,
-        )
+        negative_gap, positive_gap = carriageway_gap_by_arm[arm]
         inbound_width = inbound_width_by_arm[arm]
         outbound_width = outbound_width_by_arm[arm]
         if arm == "N":
@@ -362,14 +381,12 @@ def _compute_arm_position(
 
 def _compute_stop_line(
     *,
-    arm_name: str,
     center_point: tuple[int, int],
     dx: int,
     dy: int,
     inbound_width: int,
-    carriageway_separation: int,
-    legacy_mode: bool,
-    carriageway_separation_override_component: int,
+    negative_gap: int,
+    positive_gap: int,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
     """Compute stop line across inbound carriageway only.
     
@@ -380,13 +397,6 @@ def _compute_stop_line(
     - West (dx=-1): right is South (y+)
     """
     cx, cy = center_point
-
-    negative_gap, positive_gap = _split_carriageway_gap_for_arm(
-        arm=arm_name,
-        carriageway_separation=carriageway_separation,
-        legacy_mode=legacy_mode,
-        carriageway_separation_override_component=carriageway_separation_override_component,
-    )
 
     if dy != 0:
         # Vertical traffic (N/S): right is perpendicular on x-axis
@@ -477,8 +487,7 @@ def _compute_stop_line_base_by_arm(
     arm_names: Sequence[str],
     inbound_width_by_arm: Mapping[str, int],
     outbound_width_by_arm: Mapping[str, int],
-    carriageway_separation_by_arm: Mapping[str, int],
-    carriageway_separation_override_component: int,
+    carriageway_gap_by_arm: Mapping[str, tuple[int, int]],
 ) -> dict[str, int]:
     """Compute the auto Stop Line Base for each arm.
 
@@ -494,12 +503,7 @@ def _compute_stop_line_base_by_arm(
     ew_arms = [a for a in ("E", "W") if a in arm_names_set]
 
     def arm_physical_width(arm: str) -> int:
-        neg_gap, pos_gap = _split_carriageway_gap_for_arm(
-            arm=arm,
-            carriageway_separation=carriageway_separation_by_arm[arm],
-            legacy_mode=False,
-            carriageway_separation_override_component=carriageway_separation_override_component,
-        )
+        neg_gap, pos_gap = carriageway_gap_by_arm[arm]
         inbound_w = inbound_width_by_arm[arm]
         outbound_w = outbound_width_by_arm[arm]
         return neg_gap + inbound_w + pos_gap + outbound_w
@@ -511,6 +515,66 @@ def _compute_stop_line_base_by_arm(
         arm: (ns_base if arm in {"N", "S"} else ew_base)
         for arm in arm_names
     }
+
+
+def _derive_effective_carriageway_gaps_by_arm(
+    *,
+    arm_names: Sequence[str],
+    inbound_width_by_arm: Mapping[str, int],
+    outbound_width_by_arm: Mapping[str, int],
+    carriageway_separation_by_arm: Mapping[str, int],
+    legacy_mode: bool,
+    carriageway_separation_override_component: int,
+    center_ns_outer_borders: bool,
+) -> dict[str, tuple[int, int]]:
+    gaps_by_arm = {
+        arm: _split_carriageway_gap_for_arm(
+            arm=arm,
+            carriageway_separation=carriageway_separation_by_arm[arm],
+            legacy_mode=legacy_mode,
+            carriageway_separation_override_component=carriageway_separation_override_component,
+        )
+        for arm in arm_names
+    }
+    if legacy_mode:
+        return gaps_by_arm
+
+    if (
+        center_ns_outer_borders
+        and "N" in gaps_by_arm
+        and "S" in gaps_by_arm
+        and carriageway_separation_by_arm["N"] != carriageway_separation_by_arm["S"]
+    ):
+        north_negative_gap, north_positive_gap = gaps_by_arm["N"]
+        south_negative_gap, south_positive_gap = gaps_by_arm["S"]
+        # Recenter by translating the N/S carriageways, not by widening them.
+        for _ in range(4):
+            west_extent = max(
+                north_negative_gap + inbound_width_by_arm["N"],
+                south_negative_gap + outbound_width_by_arm["S"],
+            )
+            east_extent = max(
+                north_positive_gap + outbound_width_by_arm["N"],
+                south_positive_gap + inbound_width_by_arm["S"],
+            )
+            extent_delta = west_extent - east_extent
+            if extent_delta == 0:
+                break
+            shift = (abs(extent_delta) + 1) // 2
+            if extent_delta > 0:
+                north_negative_gap -= shift
+                south_negative_gap -= shift
+                north_positive_gap += shift
+                south_positive_gap += shift
+            else:
+                north_negative_gap += shift
+                south_negative_gap += shift
+                north_positive_gap -= shift
+                south_positive_gap -= shift
+        gaps_by_arm["N"] = (north_negative_gap, north_positive_gap)
+        gaps_by_arm["S"] = (south_negative_gap, south_positive_gap)
+
+    return gaps_by_arm
 
 
 def _opposite_arm_name(arm: str) -> str | None:
