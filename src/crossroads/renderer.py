@@ -2,6 +2,8 @@
 Rendering module for the intersection simulation.
 Can render to any pygame.Surface, including offscreen surfaces for testing.
 """
+from math import degrees
+
 import pygame
 
 from crossroads.config import (
@@ -93,21 +95,53 @@ def _draw_vehicle(
     inbound_lane_offset: int,
     vehicle_length: int,
     vehicle_width: int,
+    world_position: tuple[float, float] | None = None,
+    world_heading_radians: float | None = None,
 ) -> None:
     """Draw a vehicle on the surface."""
-    world_x, world_y = lane_center_world_position(
-        arm=arm,
-        distance=position,
-        window_width=world_window_width,
-        window_height=world_window_height,
-        road_width=road_width,
-        lane_index=lane_index,
-        lane_count=lane_count,
-        lane_width=lane_width,
-        inbound_lane_offset=inbound_lane_offset,
-    )
+    if world_position is None:
+        world_x, world_y = lane_center_world_position(
+            arm=arm,
+            distance=position,
+            window_width=world_window_width,
+            window_height=world_window_height,
+            road_width=road_width,
+            lane_index=lane_index,
+            lane_count=lane_count,
+            lane_width=lane_width,
+            inbound_lane_offset=inbound_lane_offset,
+        )
+    else:
+        world_x, world_y = world_position
     adj_x = center_x - world_window_width // 2 + world_x
     adj_y = center_y - world_window_height // 2 + world_y
+
+    if world_heading_radians is not None:
+        cache = getattr(_draw_vehicle, "_base_surface_cache", None)
+        if cache is None:
+            cache = {}
+            setattr(_draw_vehicle, "_base_surface_cache", cache)
+        key = (vehicle_length, vehicle_width)
+        vehicle_surface = cache.get(key)
+        if vehicle_surface is None:
+            vehicle_surface = pygame.Surface((vehicle_length, vehicle_width), pygame.SRCALPHA)
+            pygame.draw.rect(
+                vehicle_surface,
+                VEHICLE_COLOR,
+                pygame.Rect(0, 0, vehicle_length, vehicle_width),
+            )
+            cache[key] = vehicle_surface
+
+        rotated_surface = pygame.transform.rotate(
+            vehicle_surface,
+            -degrees(world_heading_radians),
+        )
+        rotated_rect = rotated_surface.get_rect(
+            center=(int(round(adj_x)), int(round(adj_y)))
+        )
+        surface.blit(rotated_surface, rotated_rect)
+        return
+        return
 
     if arm in ("N", "S"):
         rect = pygame.Rect(
@@ -290,6 +324,8 @@ def render(
             inbound_lane_offset=inbound_lane_offset_by_arm.get(vehicle.arm, 0),
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
+            world_position=vehicle.world_position,
+            world_heading_radians=vehicle.world_heading_radians,
         )
 
     _draw_lane_signals(

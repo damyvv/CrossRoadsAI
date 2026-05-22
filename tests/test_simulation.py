@@ -1,3 +1,7 @@
+from math import hypot
+
+import pytest
+
 from crossroads.config import (
     GREEN_DURATION_TICKS,
     SIMULATION_TICKS_PER_SECOND,
@@ -12,6 +16,8 @@ from crossroads.config import (
     WINDOW_WIDTH,
     YELLOW_DURATION_TICKS,
 )
+from crossroads.intersection import build_intersection_geometry
+from crossroads.lane_paths import LanePath, precompute_lane_paths
 from crossroads.simulation import (
     InboundLaneSpawnConfig,
     IntersectionSimulation,
@@ -20,6 +26,7 @@ from crossroads.simulation import (
 )
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.traffic_phasing import ArmPhase, default_four_way_phases
+from crossroads.vehicle import Vehicle, state_thresholds_for_arm
 
 
 def _build_simulation(
@@ -81,6 +88,321 @@ def test_state_exposes_light_states_and_vehicle_snapshots():
     assert state.light_states["E"] == LightState.RED
     assert state.light_states["W"] == LightState.RED
     assert state.vehicles == ()
+
+
+def test_turn_path_crossing_world_distance_matches_vehicle_speed():
+    lane_width = 12
+    inbound_lanes = {
+        "N": (InboundLaneSpawnConfig(movements=("left",)),),
+        "E": (InboundLaneSpawnConfig(movements=("straight",)),),
+        "S": (InboundLaneSpawnConfig(movements=("straight",)),),
+        "W": (InboundLaneSpawnConfig(movements=("straight",)),),
+    }
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 48, "E": 48, "S": 48, "W": 48},
+        inbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        lane_width=lane_width,
+        outbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+    lane_paths = precompute_lane_paths(
+        geometry=geometry,
+        inbound_lanes_by_arm=inbound_lanes,
+        outbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        lane_width=lane_width,
+    )
+
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+    simulation = IntersectionSimulation(
+        arm_names=("N", "E", "S", "W"),
+        controller=controller,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_flow=VehicleFlowConfig(
+            top_speed=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+            length=VEHICLE_LENGTH,
+            queue_gap=VEHICLE_QUEUE_GAP,
+            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        ),
+        spawn=TrafficSpawnConfig(
+            lambda_per_second=0.0,
+            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+            seed=42,
+            inbound_lanes_by_arm=inbound_lanes,
+        ),
+        lane_paths_by_lane_movement=lane_paths,
+    )
+
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    lane_path = lane_paths[("N", 0, "left")]
+    path_length = sum(
+        hypot(end[0] - start[0], end[1] - start[1])
+        for start, end in zip(lane_path.points, lane_path.points[1:])
+    )
+    target_thresholds = state_thresholds_for_arm(
+        arm=lane_path.target_arm,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    exit_distance = thresholds.crossing + path_length
+    discard_distance = exit_distance + (
+        target_thresholds.discard - target_thresholds.crossing
+    )
+    simulation._vehicles.append(
+        Vehicle(
+            arm="N",
+            lane_index=0,
+            committed_movement="left",
+            crossing_distance=thresholds.crossing,
+            exit_distance=exit_distance,
+            discard_distance=discard_distance,
+            target_velocity=1.0,
+            max_velocity=1.0,
+            acceleration=1.0,
+            deceleration=1.0,
+            position=thresholds.crossing + 10.0,
+            velocity=1.0,
+        )
+    )
+
+    sampled_positions: list[tuple[float, float]] = []
+    for _ in range(8):
+        snapshot = simulation.state().vehicles[0]
+        assert snapshot.world_position is not None
+        sampled_positions.append(snapshot.world_position)
+        simulation.advance_tick()
+
+    for previous, current in zip(sampled_positions, sampled_positions[1:]):
+        world_step = hypot(current[0] - previous[0], current[1] - previous[1])
+        assert 0.95 <= world_step <= 1.01
+
+
+def test_turn_path_traversal_preserves_lane_queue_ordering():
+    lane_width = 12
+    inbound_lanes = {
+        "N": (InboundLaneSpawnConfig(movements=("left",)),),
+        "E": (InboundLaneSpawnConfig(movements=("straight",)),),
+        "S": (InboundLaneSpawnConfig(movements=("straight",)),),
+        "W": (InboundLaneSpawnConfig(movements=("straight",)),),
+    }
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 48, "E": 48, "S": 48, "W": 48},
+        inbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        lane_width=lane_width,
+        outbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+    lane_paths = precompute_lane_paths(
+        geometry=geometry,
+        inbound_lanes_by_arm=inbound_lanes,
+        outbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        lane_width=lane_width,
+    )
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+    simulation = IntersectionSimulation(
+        arm_names=("N", "E", "S", "W"),
+        controller=controller,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_flow=VehicleFlowConfig(
+            top_speed=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+            length=VEHICLE_LENGTH,
+            queue_gap=VEHICLE_QUEUE_GAP,
+            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        ),
+        spawn=TrafficSpawnConfig(
+            lambda_per_second=0.0,
+            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+            seed=7,
+            inbound_lanes_by_arm=inbound_lanes,
+        ),
+        lane_paths_by_lane_movement=lane_paths,
+    )
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    leader = Vehicle(
+        arm="N",
+        lane_index=0,
+        committed_movement="left",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=VEHICLE_TOP_SPEED,
+        max_velocity=VEHICLE_TOP_SPEED,
+        acceleration=VEHICLE_ACCELERATION,
+        deceleration=VEHICLE_DECELERATION,
+        position=thresholds.crossing - 20.0,
+    )
+    follower = Vehicle(
+        arm="N",
+        lane_index=0,
+        committed_movement="left",
+        crossing_distance=thresholds.crossing,
+        exit_distance=thresholds.exited,
+        discard_distance=thresholds.discard,
+        target_velocity=VEHICLE_TOP_SPEED,
+        max_velocity=VEHICLE_TOP_SPEED,
+        acceleration=VEHICLE_ACCELERATION,
+        deceleration=VEHICLE_DECELERATION,
+        position=thresholds.crossing - 60.0,
+    )
+    simulation._vehicles.extend([leader, follower])
+
+    for _ in range(120):
+        simulation.advance_tick()
+        state = simulation.state()
+        lane_vehicles = [vehicle for vehicle in state.vehicles if vehicle.arm == "N"]
+        if len(lane_vehicles) != 2:
+            break
+        lane_vehicles = sorted(lane_vehicles, key=lambda vehicle: vehicle.position, reverse=True)
+        assert lane_vehicles[1].position <= lane_vehicles[0].position - (
+            VEHICLE_LENGTH + VEHICLE_QUEUE_GAP
+        )
+        assert lane_vehicles[0].world_position is not None
+        assert lane_vehicles[1].world_position is not None
+
+
+def test_turn_path_snapshot_reports_changing_heading_during_turn():
+    lane_width = 12
+    inbound_lanes = {
+        "N": (InboundLaneSpawnConfig(movements=("left",)),),
+        "E": (InboundLaneSpawnConfig(movements=("straight",)),),
+        "S": (InboundLaneSpawnConfig(movements=("straight",)),),
+        "W": (InboundLaneSpawnConfig(movements=("straight",)),),
+    }
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width_by_arm={"N": 48, "E": 48, "S": 48, "W": 48},
+        inbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        lane_width=lane_width,
+        outbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+    lane_paths = precompute_lane_paths(
+        geometry=geometry,
+        inbound_lanes_by_arm=inbound_lanes,
+        outbound_lane_count_by_arm={arm: 1 for arm in ("N", "E", "S", "W")},
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        lane_width=lane_width,
+    )
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+    simulation = IntersectionSimulation(
+        arm_names=("N", "E", "S", "W"),
+        controller=controller,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_flow=VehicleFlowConfig(
+            top_speed=VEHICLE_TOP_SPEED,
+            acceleration=VEHICLE_ACCELERATION,
+            deceleration=VEHICLE_DECELERATION,
+            length=VEHICLE_LENGTH,
+            queue_gap=VEHICLE_QUEUE_GAP,
+            stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+        ),
+        spawn=TrafficSpawnConfig(
+            lambda_per_second=0.0,
+            ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+            seed=17,
+            inbound_lanes_by_arm=inbound_lanes,
+        ),
+        lane_paths_by_lane_movement=lane_paths,
+    )
+    thresholds = state_thresholds_for_arm(
+        arm="N",
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    lane_path = lane_paths[("N", 0, "left")]
+    path_length = sum(
+        hypot(end[0] - start[0], end[1] - start[1])
+        for start, end in zip(lane_path.points, lane_path.points[1:])
+    )
+    target_thresholds = state_thresholds_for_arm(
+        arm=lane_path.target_arm,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        stop_line_distance=STOP_LINE_DISTANCE,
+        vehicle_length=VEHICLE_LENGTH,
+    )
+    exit_distance = thresholds.crossing + path_length
+    discard_distance = exit_distance + (
+        target_thresholds.discard - target_thresholds.crossing
+    )
+    simulation._vehicles.append(
+        Vehicle(
+            arm="N",
+            lane_index=0,
+            committed_movement="left",
+            crossing_distance=thresholds.crossing,
+            exit_distance=exit_distance,
+            discard_distance=discard_distance,
+            target_velocity=1.0,
+            max_velocity=1.0,
+            acceleration=1.0,
+            deceleration=1.0,
+            position=thresholds.crossing + 6.0,
+            velocity=1.0,
+        )
+    )
+
+    headings: list[float] = []
+    for _ in range(8):
+        snapshot = simulation.state().vehicles[0]
+        assert snapshot.world_heading_radians is not None
+        headings.append(snapshot.world_heading_radians)
+        simulation.advance_tick()
+
+    assert len(set(round(value, 3) for value in headings)) > 1
 
 
 def test_same_seed_produces_identical_simulation_sequence():
@@ -248,3 +570,79 @@ def test_state_exposes_per_lane_light_states_for_each_inbound_lane():
 
     assert state.lane_counts_by_arm == {"N": 2}
     assert state.lane_light_states == {("N", 0): LightState.GREEN, ("N", 1): LightState.GREEN}
+
+
+def test_simulation_rejects_lane_paths_with_unknown_source_arm():
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
+    with pytest.raises(ValueError, match="unknown source arm"):
+        IntersectionSimulation(
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            stop_line_distance=STOP_LINE_DISTANCE,
+            vehicle_flow=VehicleFlowConfig(
+                top_speed=VEHICLE_TOP_SPEED,
+                acceleration=VEHICLE_ACCELERATION,
+                deceleration=VEHICLE_DECELERATION,
+                length=VEHICLE_LENGTH,
+                queue_gap=VEHICLE_QUEUE_GAP,
+                stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+            ),
+            spawn=TrafficSpawnConfig(
+                lambda_per_second=0.0,
+                ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+                seed=1,
+            ),
+            lane_paths_by_lane_movement={
+                ("X", 0, "straight"): LanePath(
+                    target_arm="S",
+                    target_outbound_lane_index=0,
+                    points=((0.0, 0.0), (1.0, 1.0)),
+                )
+            },
+        )
+
+
+def test_simulation_rejects_lane_paths_with_unknown_target_arm():
+    controller = TrafficLightController(
+        arm_names=["N", "E", "S", "W"],
+        phases=default_four_way_phases(),
+        green_ticks=GREEN_DURATION_TICKS,
+        yellow_ticks=YELLOW_DURATION_TICKS,
+    )
+
+    with pytest.raises(ValueError, match="unknown target arm"):
+        IntersectionSimulation(
+            arm_names=("N", "E", "S", "W"),
+            controller=controller,
+            window_width=WINDOW_WIDTH,
+            window_height=WINDOW_HEIGHT,
+            stop_line_distance=STOP_LINE_DISTANCE,
+            vehicle_flow=VehicleFlowConfig(
+                top_speed=VEHICLE_TOP_SPEED,
+                acceleration=VEHICLE_ACCELERATION,
+                deceleration=VEHICLE_DECELERATION,
+                length=VEHICLE_LENGTH,
+                queue_gap=VEHICLE_QUEUE_GAP,
+                stop_distance_before_line=VEHICLE_STOP_DISTANCE_BEFORE_LINE,
+            ),
+            spawn=TrafficSpawnConfig(
+                lambda_per_second=0.0,
+                ticks_per_second=SIMULATION_TICKS_PER_SECOND,
+                seed=1,
+            ),
+            lane_paths_by_lane_movement={
+                ("N", 0, "straight"): LanePath(
+                    target_arm="X",
+                    target_outbound_lane_index=0,
+                    points=((0.0, 0.0), (1.0, 1.0)),
+                )
+            },
+        )

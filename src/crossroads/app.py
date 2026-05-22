@@ -6,6 +6,7 @@ from crossroads.intersection import (
     compute_road_width_by_arm_from_inbound_lanes,
     compute_road_width_from_inbound_lanes,
 )
+from crossroads.lane_paths import precompute_lane_paths
 from crossroads.renderer import render
 from crossroads.runtime_config import RuntimeConfig, resolve_runtime_config
 from crossroads.simulation import (
@@ -87,6 +88,14 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
         green_ticks=runtime_config.green_duration_ticks,
         yellow_ticks=runtime_config.yellow_duration_ticks,
     )
+    lane_paths_by_lane_movement = precompute_lane_paths(
+        geometry=geometry,
+        inbound_lanes_by_arm=runtime_config.inbound_lanes_by_arm,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
+        window_width=runtime_config.window_width,
+        window_height=runtime_config.window_height,
+        lane_width=lane_width,
+    )
 
     simulation = IntersectionSimulation(
         arm_names=tuple(arm.name for arm in geometry.arms),
@@ -118,6 +127,7 @@ def run(*, max_frames: int | None = None, runtime_config: RuntimeConfig | None =
                 for arm, lanes in runtime_config.inbound_lanes_by_arm.items()
             },
         ),
+        lane_paths_by_lane_movement=lane_paths_by_lane_movement,
     )
 
     running = True
