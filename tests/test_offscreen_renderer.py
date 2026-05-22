@@ -222,6 +222,52 @@ def test_offscreen_renderer_draws_vehicles():
     )
 
 
+def test_offscreen_renderer_prefers_vehicle_world_position_when_available():
+    pygame.init()
+
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=25,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    from crossroads.simulation import SimulationState, VehicleSnapshot
+    from crossroads.vehicle import VehicleState, lane_center_world_position
+
+    lane_center_x, lane_center_y = lane_center_world_position(
+        arm="N",
+        distance=150.0,
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        road_width=ROAD_WIDTH,
+        lane_width=VEHICLE_WIDTH,
+    )
+    world_position = (lane_center_x + 40.0, lane_center_y + 30.0)
+    state = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        vehicles=(
+            VehicleSnapshot(
+                arm="N",
+                position=150.0,
+                world_position=world_position,
+                state=VehicleState.CROSSING,
+                wait_ticks=0,
+            ),
+        ),
+    )
+
+    render(surface=surface, geometry=geometry, state=state, average_wait_time=0.0)
+
+    center_x, center_y = surface.get_width() // 2, surface.get_height() // 2
+    pixel_x = center_x - WINDOW_WIDTH // 2 + int(world_position[0])
+    pixel_y = center_y - WINDOW_HEIGHT // 2 + int(world_position[1])
+    pixel = surface.get_at((pixel_x, pixel_y))
+    assert tuple(pixel[:3]) == VEHICLE_COLOR
+
+
 def test_offscreen_renderer_keeps_carriageway_gap_as_background():
     pygame.init()
 

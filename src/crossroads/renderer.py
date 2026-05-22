@@ -93,19 +93,23 @@ def _draw_vehicle(
     inbound_lane_offset: int,
     vehicle_length: int,
     vehicle_width: int,
+    world_position: tuple[float, float] | None = None,
 ) -> None:
     """Draw a vehicle on the surface."""
-    world_x, world_y = lane_center_world_position(
-        arm=arm,
-        distance=position,
-        window_width=world_window_width,
-        window_height=world_window_height,
-        road_width=road_width,
-        lane_index=lane_index,
-        lane_count=lane_count,
-        lane_width=lane_width,
-        inbound_lane_offset=inbound_lane_offset,
-    )
+    if world_position is None:
+        world_x, world_y = lane_center_world_position(
+            arm=arm,
+            distance=position,
+            window_width=world_window_width,
+            window_height=world_window_height,
+            road_width=road_width,
+            lane_index=lane_index,
+            lane_count=lane_count,
+            lane_width=lane_width,
+            inbound_lane_offset=inbound_lane_offset,
+        )
+    else:
+        world_x, world_y = world_position
     adj_x = center_x - world_window_width // 2 + world_x
     adj_y = center_y - world_window_height // 2 + world_y
 
@@ -290,6 +294,7 @@ def render(
             inbound_lane_offset=inbound_lane_offset_by_arm.get(vehicle.arm, 0),
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
+            world_position=vehicle.world_position,
         )
 
     _draw_lane_signals(

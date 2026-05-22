@@ -3,12 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import isfinite
 from random import Random
-from typing import Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 from crossroads.metrics import MetricsTracker
 from crossroads.traffic_generator import TrafficGenerator
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.vehicle import Vehicle, VehicleState, spawn_distance_for_length, state_thresholds_for_arm
+
+if TYPE_CHECKING:
+    from crossroads.lane_paths import LanePath
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,7 @@ class VehicleSnapshot:
     wait_ticks: int
     lane_index: int = 0
     committed_movement: str = "straight"
+    world_position: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,78 @@ class SimulationState:
     vehicles: tuple[VehicleSnapshot, ...]
     lane_light_states: dict[tuple[str, int], LightState] = field(default_factory=dict)
     lane_counts_by_arm: dict[str, int] = field(default_factory=dict)
+
+
+def _polyline_point_at_fraction(
+    *,
+    points: tuple[tuple[float, float], ...],
+    fraction: float,
+) -> tuple[float, float]:
+    if len(points) == 1:
+        return points[0]
+    clamped_fraction = min(max(fraction, 0.0), 1.0)
+    segment_lengths = tuple(
+        ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+        for start, end in zip(points, points[1:])
+    )
+    total_length = sum(segment_lengths)
+    if total_length == 0:
+        return points[-1]
+
+    target_length = total_length * clamped_fraction
+    traversed = 0.0
+    for index, length in enumerate(segment_lengths):
+        if traversed + length >= target_length:
+            if length == 0:
+                return points[index + 1]
+            local_fraction = (target_length - traversed) / length
+            start = points[index]
+            end = points[index + 1]
+            return (
+                start[0] + ((end[0] - start[0]) * local_fraction),
+                start[1] + ((end[1] - start[1]) * local_fraction),
+            )
+        traversed += length
+    return points[-1]
+
+
+def _world_position_on_lane_path(
+    *,
+    vehicle: Vehicle,
+    crossing_distance: float,
+    exit_distance: float,
+    lane_path: LanePath,
+) -> tuple[float, float]:
+    path_start = lane_path.points[0]
+    path_end = lane_path.points[-1]
+    if vehicle.position <= crossing_distance:
+        offset = crossing_distance - vehicle.position
+        if vehicle.arm == "N":
+            return (path_start[0], path_start[1] - offset)
+        if vehicle.arm == "S":
+            return (path_start[0], path_start[1] + offset)
+        if vehicle.arm == "E":
+            return (path_start[0] + offset, path_start[1])
+        if vehicle.arm == "W":
+            return (path_start[0] - offset, path_start[1])
+        raise ValueError(f"Unknown arm: {vehicle.arm!r}")
+
+    if vehicle.position <= exit_distance:
+        progress = (vehicle.position - crossing_distance) / (
+            exit_distance - crossing_distance
+        )
+        return _polyline_point_at_fraction(points=lane_path.points, fraction=progress)
+
+    overflow = vehicle.position - exit_distance
+    if lane_path.target_arm == "N":
+        return (path_end[0], path_end[1] - overflow)
+    if lane_path.target_arm == "S":
+        return (path_end[0], path_end[1] + overflow)
+    if lane_path.target_arm == "E":
+        return (path_end[0] + overflow, path_end[1])
+    if lane_path.target_arm == "W":
+        return (path_end[0] - overflow, path_end[1])
+    raise ValueError(f"Unknown arm: {lane_path.target_arm!r}")
 
 
 def _lane_light_states_by_inbound_lane(
@@ -269,6 +345,7 @@ class IntersectionSimulation:
         vehicle_flow: VehicleFlowConfig,
         spawn: TrafficSpawnConfig,
         controller: TrafficLightController,
+        lane_paths_by_lane_movement: Mapping[tuple[str, int, str], LanePath] | None = None,
     ) -> None:
         self._arm_names = tuple(arm_names)
         if not self._arm_names:
@@ -301,6 +378,11 @@ class IntersectionSimulation:
             inbound_lanes_by_arm=spawn.inbound_lanes_by_arm,
         )
         self._spawn_random = Random(spawn.seed)
+        self._lane_paths_by_lane_movement = (
+            dict(lane_paths_by_lane_movement)
+            if lane_paths_by_lane_movement is not None
+            else {}
+        )
         self._vehicles: list[Vehicle] = []
         self._metrics = MetricsTracker()
         self._spawn_new_vehicles()
@@ -325,6 +407,21 @@ class IntersectionSimulation:
                     position=vehicle.position,
                     state=vehicle.state,
                     wait_ticks=vehicle.wait_ticks,
+                    world_position=(
+                        _world_position_on_lane_path(
+                            vehicle=vehicle,
+                            crossing_distance=self._thresholds_by_arm[vehicle.arm].crossing,
+                            exit_distance=self._thresholds_by_arm[vehicle.arm].exited,
+                            lane_path=lane_path,
+                        )
+                        if (
+                            lane_path := self._lane_paths_by_lane_movement.get(
+                                (vehicle.arm, vehicle.lane_index, vehicle.committed_movement)
+                            )
+                        )
+                        is not None
+                        else None
+                    ),
                 )
                 for vehicle in self._vehicles
             ),
