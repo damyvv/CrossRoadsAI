@@ -20,6 +20,7 @@ class RuntimeConfig:
     road_width: int | None
     road_lane_width: int | None
     road_carriageway_separation: int | None
+    road_lane_marker_scale: float
     stop_line_distance: int
     stop_line_distance_by_arm: dict[str, int] | None
     green_duration_ticks: int
@@ -71,6 +72,7 @@ _OPTIONAL_KEYS = {
     "stop_line_distance_by_arm",
     "_phases_data",
     "_inbound_lanes_data",
+    "road_lane_marker_scale",
 }
 _ALLOWED_KEYS = _REQUIRED_KEYS | _OPTIONAL_KEYS
 _VALID_ARMS_BY_COUNT = {
@@ -186,6 +188,7 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
         if section == "road":
             allowed_nested_keys.add("carriageway_separation")
             allowed_nested_keys.add("stop_line_distance_by_arm")
+            allowed_nested_keys.add("lane_marker_scale")
         
         unknown_nested_keys = sorted(set(section_data.keys()) - allowed_nested_keys)
         if unknown_nested_keys:
@@ -216,6 +219,8 @@ def _flatten_nested_yaml(data: dict[str, Any]) -> dict[str, Any]:
             flat["stop_line_distance_by_arm"] = data["road"]["stop_line_distance_by_arm"]
         if "carriageway_separation" in data["road"]:
             flat["road_carriageway_separation"] = data["road"]["carriageway_separation"]
+        if "lane_marker_scale" in data["road"]:
+            flat["road_lane_marker_scale"] = data["road"]["lane_marker_scale"]
     
     # Handle optional intersection.missing_arm if provided
     if "intersection" in data and isinstance(data["intersection"], dict):
@@ -293,6 +298,25 @@ def _parse_optional_int(
     if minimum is not None and value < minimum:
         raise ValueError(f"{key} must be >= {minimum}")
     return value
+
+
+def _parse_optional_float(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    minimum: float | None = None,
+) -> float | None:
+    if key not in data:
+        return None
+    value = data[key]
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{key} must be a number")
+    parsed = float(value)
+    if minimum is not None and parsed < minimum:
+        raise ValueError(f"{key} must be >= {minimum}")
+    return parsed
 
 
 def _topology_arms(*, arm_count: int, missing_arm: str | None) -> set[str]:
@@ -626,6 +650,10 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         data, arm_count=arm_count, missing_arm=missing_arm
     )
 
+    lane_marker_scale = _parse_optional_float(data, "road_lane_marker_scale", minimum=0.0)
+    if lane_marker_scale is None:
+        lane_marker_scale = 1.0
+
     return RuntimeConfig(
         window_width=_parse_int(data, "window_width", minimum=1),
         window_height=_parse_int(data, "window_height", minimum=1),
@@ -636,6 +664,7 @@ def _from_mapping(data: Mapping[str, Any]) -> RuntimeConfig:
         road_carriageway_separation=_parse_optional_int(
             data, "road_carriageway_separation", minimum=0
         ),
+        road_lane_marker_scale=lane_marker_scale,
         stop_line_distance=_parse_int(data, "stop_line_distance", minimum=0),
         stop_line_distance_by_arm=stop_line_distance_by_arm,
         green_duration_ticks=_parse_int(data, "green_duration_ticks", minimum=1),
@@ -682,6 +711,7 @@ def legacy_runtime_config() -> RuntimeConfig:
         road_width=legacy_config.ROAD_WIDTH,
         road_lane_width=None,
         road_carriageway_separation=None,
+        road_lane_marker_scale=1.0,
         stop_line_distance=legacy_config.STOP_LINE_DISTANCE,
         stop_line_distance_by_arm=None,
         green_duration_ticks=legacy_config.GREEN_DURATION_TICKS,
