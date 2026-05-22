@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import isfinite
+from math import atan2, hypot, isfinite
 from random import Random
-from typing import TYPE_CHECKING, Mapping, Sequence
+from typing import Mapping, Sequence
 
+from crossroads.lane_paths import LanePath
 from crossroads.metrics import MetricsTracker
 from crossroads.traffic_generator import TrafficGenerator
 from crossroads.traffic_light import LightState, TrafficLightController
 from crossroads.vehicle import Vehicle, VehicleState, spawn_distance_for_length, state_thresholds_for_arm
-
-if TYPE_CHECKING:
-    from crossroads.lane_paths import LanePath
 
 
 @dataclass(frozen=True)
@@ -48,6 +46,7 @@ class VehicleSnapshot:
     lane_index: int = 0
     committed_movement: str = "straight"
     world_position: tuple[float, float] | None = None
+    world_heading_radians: float | None = None
 
 
 @dataclass(frozen=True)
@@ -58,76 +57,104 @@ class SimulationState:
     lane_counts_by_arm: dict[str, int] = field(default_factory=dict)
 
 
-def _polyline_point_at_fraction(
+@dataclass(frozen=True)
+class _LanePathRuntime:
+    lane_path: LanePath
+    path_length: float
+    target_post_exit_distance: float
+
+
+_INBOUND_DIRECTION_BY_ARM = {
+    "N": (0.0, 1.0),
+    "S": (0.0, -1.0),
+    "E": (-1.0, 0.0),
+    "W": (1.0, 0.0),
+}
+_OUTBOUND_DIRECTION_BY_ARM = {
+    "N": (0.0, -1.0),
+    "S": (0.0, 1.0),
+    "E": (1.0, 0.0),
+    "W": (-1.0, 0.0),
+}
+
+
+def _path_length(*, points: tuple[tuple[float, float], ...]) -> float:
+    return sum(hypot(end[0] - start[0], end[1] - start[1]) for start, end in zip(points, points[1:]))
+
+
+def _polyline_pose_at_distance(
     *,
     points: tuple[tuple[float, float], ...],
-    fraction: float,
-) -> tuple[float, float]:
-    if len(points) == 1:
-        return points[0]
-    clamped_fraction = min(max(fraction, 0.0), 1.0)
-    segment_lengths = tuple(
-        ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
-        for start, end in zip(points, points[1:])
-    )
+    distance: float,
+) -> tuple[tuple[float, float], float]:
+    if len(points) < 2:
+        raise ValueError("lane path must contain at least two points")
+    segment_lengths = tuple(hypot(end[0] - start[0], end[1] - start[1]) for start, end in zip(points, points[1:]))
     total_length = sum(segment_lengths)
-    if total_length == 0:
-        return points[-1]
+    if total_length <= 0:
+        raise ValueError("lane path must have positive length")
 
-    target_length = total_length * clamped_fraction
+    clamped_distance = min(max(distance, 0.0), total_length)
+    if clamped_distance == 0.0:
+        first_start, first_end = points[0], points[1]
+        return points[0], atan2(first_end[1] - first_start[1], first_end[0] - first_start[0])
+    if clamped_distance == total_length:
+        last_start, last_end = points[-2], points[-1]
+        return points[-1], atan2(last_end[1] - last_start[1], last_end[0] - last_start[0])
+
+    target_length = clamped_distance
     traversed = 0.0
     for index, length in enumerate(segment_lengths):
         if traversed + length >= target_length:
             if length == 0:
-                return points[index + 1]
+                next_point = points[index + 1]
+                previous_point = points[index]
+                heading = atan2(next_point[1] - previous_point[1], next_point[0] - previous_point[0])
+                return next_point, heading
             local_fraction = (target_length - traversed) / length
             start = points[index]
             end = points[index + 1]
+            heading = atan2(end[1] - start[1], end[0] - start[0])
             return (
-                start[0] + ((end[0] - start[0]) * local_fraction),
-                start[1] + ((end[1] - start[1]) * local_fraction),
+                (
+                    start[0] + ((end[0] - start[0]) * local_fraction),
+                    start[1] + ((end[1] - start[1]) * local_fraction),
+                ),
+                heading,
             )
         traversed += length
-    return points[-1]
+    last_start, last_end = points[-2], points[-1]
+    return points[-1], atan2(last_end[1] - last_start[1], last_end[0] - last_start[0])
 
 
-def _world_position_on_lane_path(
+def _world_pose_on_lane_path(
     *,
     vehicle: Vehicle,
-    crossing_distance: float,
-    exit_distance: float,
-    lane_path: LanePath,
-) -> tuple[float, float]:
+    lane_path_runtime: _LanePathRuntime,
+) -> tuple[tuple[float, float], float]:
+    lane_path = lane_path_runtime.lane_path
     path_start = lane_path.points[0]
     path_end = lane_path.points[-1]
-    if vehicle.position <= crossing_distance:
-        offset = crossing_distance - vehicle.position
-        if vehicle.arm == "N":
-            return (path_start[0], path_start[1] - offset)
-        if vehicle.arm == "S":
-            return (path_start[0], path_start[1] + offset)
-        if vehicle.arm == "E":
-            return (path_start[0] + offset, path_start[1])
-        if vehicle.arm == "W":
-            return (path_start[0] - offset, path_start[1])
-        raise ValueError(f"Unknown arm: {vehicle.arm!r}")
-
-    if vehicle.position <= exit_distance:
-        progress = (vehicle.position - crossing_distance) / (
-            exit_distance - crossing_distance
+    if vehicle.position <= vehicle.crossing_distance:
+        inbound_dx, inbound_dy = _INBOUND_DIRECTION_BY_ARM[vehicle.arm]
+        offset = vehicle.position - vehicle.crossing_distance
+        return (
+            (path_start[0] + (inbound_dx * offset), path_start[1] + (inbound_dy * offset)),
+            atan2(inbound_dy, inbound_dx),
         )
-        return _polyline_point_at_fraction(points=lane_path.points, fraction=progress)
 
-    overflow = vehicle.position - exit_distance
-    if lane_path.target_arm == "N":
-        return (path_end[0], path_end[1] - overflow)
-    if lane_path.target_arm == "S":
-        return (path_end[0], path_end[1] + overflow)
-    if lane_path.target_arm == "E":
-        return (path_end[0] + overflow, path_end[1])
-    if lane_path.target_arm == "W":
-        return (path_end[0] - overflow, path_end[1])
-    raise ValueError(f"Unknown arm: {lane_path.target_arm!r}")
+    if vehicle.position <= vehicle.exit_distance:
+        return _polyline_pose_at_distance(
+            points=lane_path.points,
+            distance=vehicle.position - vehicle.crossing_distance,
+        )
+
+    outbound_dx, outbound_dy = _OUTBOUND_DIRECTION_BY_ARM[lane_path.target_arm]
+    overflow = vehicle.position - vehicle.exit_distance
+    return (
+        (path_end[0] + (outbound_dx * overflow), path_end[1] + (outbound_dy * overflow)),
+        atan2(outbound_dy, outbound_dx),
+    )
 
 
 def _lane_light_states_by_inbound_lane(
@@ -378,11 +405,24 @@ class IntersectionSimulation:
             inbound_lanes_by_arm=spawn.inbound_lanes_by_arm,
         )
         self._spawn_random = Random(spawn.seed)
-        self._lane_paths_by_lane_movement = (
-            dict(lane_paths_by_lane_movement)
-            if lane_paths_by_lane_movement is not None
-            else {}
-        )
+        self._lane_path_runtime_by_lane_movement = {
+            key: _LanePathRuntime(
+                lane_path=lane_path,
+                path_length=_path_length(points=lane_path.points),
+                target_post_exit_distance=(
+                    self._thresholds_by_arm[lane_path.target_arm].discard
+                    - self._thresholds_by_arm[lane_path.target_arm].crossing
+                ),
+            )
+            for key, lane_path in (lane_paths_by_lane_movement or {}).items()
+        }
+        for key, runtime in self._lane_path_runtime_by_lane_movement.items():
+            if runtime.path_length <= 0:
+                raise ValueError(f"lane path {key!r} must have positive path length")
+            if runtime.target_post_exit_distance <= 0:
+                raise ValueError(
+                    f"lane path {key!r} has non-positive target post-exit distance"
+                )
         self._vehicles: list[Vehicle] = []
         self._metrics = MetricsTracker()
         self._spawn_new_vehicles()
@@ -399,32 +439,36 @@ class IntersectionSimulation:
             lane_counts_by_arm={
                 arm: len(self._inbound_lanes_by_arm[arm]) for arm in self._arm_names
             },
-            vehicles=tuple(
-                VehicleSnapshot(
-                    arm=vehicle.arm,
-                    lane_index=vehicle.lane_index,
-                    committed_movement=vehicle.committed_movement,
-                    position=vehicle.position,
-                    state=vehicle.state,
-                    wait_ticks=vehicle.wait_ticks,
-                    world_position=(
-                        _world_position_on_lane_path(
-                            vehicle=vehicle,
-                            crossing_distance=self._thresholds_by_arm[vehicle.arm].crossing,
-                            exit_distance=self._thresholds_by_arm[vehicle.arm].exited,
-                            lane_path=lane_path,
-                        )
-                        if (
-                            lane_path := self._lane_paths_by_lane_movement.get(
-                                (vehicle.arm, vehicle.lane_index, vehicle.committed_movement)
-                            )
-                        )
-                        is not None
-                        else None
-                    ),
-                )
-                for vehicle in self._vehicles
-            ),
+            vehicles=tuple(self._vehicle_snapshot(vehicle) for vehicle in self._vehicles),
+        )
+
+    def _vehicle_snapshot(self, vehicle: Vehicle) -> VehicleSnapshot:
+        lane_path_runtime = self._lane_path_runtime_by_lane_movement.get(
+            (vehicle.arm, vehicle.lane_index, vehicle.committed_movement)
+        )
+        if lane_path_runtime is None:
+            return VehicleSnapshot(
+                arm=vehicle.arm,
+                lane_index=vehicle.lane_index,
+                committed_movement=vehicle.committed_movement,
+                position=vehicle.position,
+                state=vehicle.state,
+                wait_ticks=vehicle.wait_ticks,
+            )
+
+        world_position, world_heading_radians = _world_pose_on_lane_path(
+            vehicle=vehicle,
+            lane_path_runtime=lane_path_runtime,
+        )
+        return VehicleSnapshot(
+            arm=vehicle.arm,
+            lane_index=vehicle.lane_index,
+            committed_movement=vehicle.committed_movement,
+            position=vehicle.position,
+            state=vehicle.state,
+            wait_ticks=vehicle.wait_ticks,
+            world_position=world_position,
+            world_heading_radians=world_heading_radians,
         )
 
     def average_wait_time(self) -> float:
@@ -486,14 +530,23 @@ class IntersectionSimulation:
             lane = self._inbound_lanes_by_arm[spawn_arm][lane_index]
             committed_movement = _sample_committed_movement(lane=lane, rng=self._spawn_random)
             thresholds = self._thresholds_by_arm[spawn_arm]
+            lane_path_runtime = self._lane_path_runtime_by_lane_movement.get(
+                (spawn_arm, lane_index, committed_movement)
+            )
+            if lane_path_runtime is None:
+                exit_distance = thresholds.exited
+                discard_distance = thresholds.discard
+            else:
+                exit_distance = thresholds.crossing + lane_path_runtime.path_length
+                discard_distance = exit_distance + lane_path_runtime.target_post_exit_distance
             self._vehicles.append(
                 Vehicle(
                     arm=spawn_arm,
                     lane_index=lane_index,
                     committed_movement=committed_movement,
                     crossing_distance=thresholds.crossing,
-                    exit_distance=thresholds.exited,
-                    discard_distance=thresholds.discard,
+                    exit_distance=exit_distance,
+                    discard_distance=discard_distance,
                     target_velocity=self._vehicle_flow.top_speed,
                     max_velocity=self._vehicle_flow.top_speed,
                     acceleration=self._vehicle_flow.acceleration,

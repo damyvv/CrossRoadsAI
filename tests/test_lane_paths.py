@@ -183,3 +183,44 @@ def test_precompute_lane_paths_rejects_movement_target_arm_missing_from_geometry
             window_height=720,
             lane_width=12,
         )
+
+
+def test_straight_path_to_south_uses_outbound_carriageway_offset_without_doubling():
+    lane_width = 20
+    geometry = build_intersection_geometry(
+        window_width=960,
+        window_height=720,
+        arm_count=4,
+        road_width_by_arm={"N": 140, "E": 80, "S": 80, "W": 80},
+        inbound_lane_count_by_arm={"N": 6, "E": 2, "S": 1, "W": 2},
+        straight_capable_lane_indices_by_arm={
+            "N": (2, 3, 4),
+            "E": (0, 1),
+            "S": (0,),
+            "W": (0, 1),
+        },
+        lane_width=lane_width,
+        outbound_lane_count_by_arm={"N": 1, "E": 2, "S": 3, "W": 2},
+        stop_line_distance=60,
+    )
+    inbound_lanes = {
+        "N": (_Lane("left"), _Lane("left"), _Lane("straight"), _Lane("straight"), _Lane("straight"), _Lane("right")),
+        "E": (_Lane("straight"), _Lane("straight")),
+        "S": (_Lane("straight"),),
+        "W": (_Lane("straight"), _Lane("straight")),
+    }
+    paths = precompute_lane_paths(
+        geometry=geometry,
+        inbound_lanes_by_arm=inbound_lanes,
+        outbound_lane_count_by_arm={"N": 1, "E": 2, "S": 3, "W": 2},
+        window_width=960,
+        window_height=720,
+        lane_width=lane_width,
+    )
+
+    # N lane index 2 (first straight lane) maps to S outbound lane index 0.
+    lane_path = paths[("N", 2, "straight")]
+    assert lane_path.target_arm == "S"
+    assert lane_path.target_outbound_lane_index == 0
+    # End x should be centered in S outbound lane 0 at x = 430, not shifted 2 lanes left to x = 390.
+    assert lane_path.points[-1][0] == 430.0

@@ -268,6 +268,45 @@ def test_offscreen_renderer_prefers_vehicle_world_position_when_available():
     assert tuple(pixel[:3]) == VEHICLE_COLOR
 
 
+def test_offscreen_renderer_rotates_vehicle_using_world_heading():
+    pygame.init()
+
+    surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    geometry = build_intersection_geometry(
+        window_width=WINDOW_WIDTH,
+        window_height=WINDOW_HEIGHT,
+        arm_count=4,
+        road_width=25,
+        stop_line_distance=STOP_LINE_DISTANCE,
+    )
+
+    from crossroads.simulation import SimulationState, VehicleSnapshot
+    from crossroads.vehicle import VehicleState
+
+    world_position = (200.0, 200.0)
+    state = SimulationState(
+        light_states={"N": LightState.GREEN, "E": LightState.RED, "S": LightState.GREEN, "W": LightState.RED},
+        vehicles=(
+            VehicleSnapshot(
+                arm="N",
+                position=120.0,
+                world_position=world_position,
+                world_heading_radians=0.0,
+                state=VehicleState.CROSSING,
+                wait_ticks=0,
+            ),
+        ),
+    )
+
+    render(surface=surface, geometry=geometry, state=state, average_wait_time=0.0)
+
+    center_x, center_y = surface.get_width() // 2, surface.get_height() // 2
+    pixel_x = center_x - WINDOW_WIDTH // 2 + int(world_position[0])
+    pixel_y = center_y - WINDOW_HEIGHT // 2 + int(world_position[1])
+    horizontal_probe = surface.get_at((pixel_x + (VEHICLE_LENGTH // 2) - 1, pixel_y))
+    assert tuple(horizontal_probe[:3]) == VEHICLE_COLOR
+
+
 def test_offscreen_renderer_keeps_carriageway_gap_as_background():
     pygame.init()
 

@@ -12,6 +12,7 @@ class ArmGeometry:
     center_line: tuple[tuple[int, int], tuple[int, int]]
     carriageway_separation: int
     inbound_lane_offset: int
+    outbound_lane_offset: int
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,7 @@ def build_intersection_geometry(
             carriageway_separation_override_component=carriageway_override_component,
         )
         inbound_lane_offset = negative_gap if name in {"N", "E"} else positive_gap
+        outbound_lane_offset = positive_gap if name in {"N", "E"} else negative_gap
 
         arms.append(
             ArmGeometry(
@@ -220,6 +222,7 @@ def build_intersection_geometry(
                 center_line=center_line,
                 carriageway_separation=effective_carriageway_separation_by_arm[name],
                 inbound_lane_offset=inbound_lane_offset,
+                outbound_lane_offset=outbound_lane_offset,
             )
         )
         if effective_carriageway_separation_by_arm[name] <= 0:

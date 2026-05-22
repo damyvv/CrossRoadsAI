@@ -2,6 +2,8 @@
 Rendering module for the intersection simulation.
 Can render to any pygame.Surface, including offscreen surfaces for testing.
 """
+from math import degrees
+
 import pygame
 
 from crossroads.config import (
@@ -94,6 +96,7 @@ def _draw_vehicle(
     vehicle_length: int,
     vehicle_width: int,
     world_position: tuple[float, float] | None = None,
+    world_heading_radians: float | None = None,
 ) -> None:
     """Draw a vehicle on the surface."""
     if world_position is None:
@@ -112,6 +115,23 @@ def _draw_vehicle(
         world_x, world_y = world_position
     adj_x = center_x - world_window_width // 2 + world_x
     adj_y = center_y - world_window_height // 2 + world_y
+
+    if world_heading_radians is not None:
+        vehicle_surface = pygame.Surface((vehicle_length, vehicle_width), pygame.SRCALPHA)
+        pygame.draw.rect(
+            vehicle_surface,
+            VEHICLE_COLOR,
+            pygame.Rect(0, 0, vehicle_length, vehicle_width),
+        )
+        rotated_surface = pygame.transform.rotate(
+            vehicle_surface,
+            -degrees(world_heading_radians),
+        )
+        rotated_rect = rotated_surface.get_rect(
+            center=(int(round(adj_x)), int(round(adj_y)))
+        )
+        surface.blit(rotated_surface, rotated_rect)
+        return
 
     if arm in ("N", "S"):
         rect = pygame.Rect(
@@ -295,6 +315,7 @@ def render(
             vehicle_length=vehicle_length,
             vehicle_width=vehicle_width,
             world_position=vehicle.world_position,
+            world_heading_radians=vehicle.world_heading_radians,
         )
 
     _draw_lane_signals(

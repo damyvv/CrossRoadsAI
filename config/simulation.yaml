@@ -64,7 +64,11 @@ simulation:
   vehicle_spawn_seed: 42
 
 phases:
-  - arms: [N, S]
+  - arms: [N]
     name: N
-  - arms: [E, W]
-    name: EW
+  - arms: [E]
+    name: E
+  - arms: [S]
+    name: S
+  - arms: [W]
+    name: W

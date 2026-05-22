@@ -274,14 +274,13 @@ def _destination_lane_axis_coordinate(
 
 
 def _carriageway_gaps(*, arm: str, arm_geometry: ArmGeometry) -> tuple[float, float]:
-    separation = arm_geometry.carriageway_separation
     if arm in {"N", "E"}:
         negative_gap = float(arm_geometry.inbound_lane_offset)
-        positive_gap = float(separation) - negative_gap
+        positive_gap = float(arm_geometry.outbound_lane_offset)
         return (negative_gap, positive_gap)
     if arm in {"S", "W"}:
         positive_gap = float(arm_geometry.inbound_lane_offset)
-        negative_gap = float(separation) - positive_gap
+        negative_gap = float(arm_geometry.outbound_lane_offset)
         return (negative_gap, positive_gap)
     raise ValueError(f"unknown arm: {arm!r}")
 
