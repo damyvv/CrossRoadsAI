@@ -3,6 +3,7 @@ Rendering module for the intersection simulation.
 Can render to any pygame.Surface, including offscreen surfaces for testing.
 """
 from math import degrees
+from typing import Mapping, Sequence
 
 import pygame
 
@@ -29,7 +30,8 @@ from crossroads.vehicle import lane_center_world_position
 
 
 _CENTER_LINE_COLOR = (200, 200, 200)
-_CENTER_LINE_DASH_PATTERN = [4, 4]
+_MARKING_COLOR = _CENTER_LINE_COLOR
+_LANE_MARKING_DASH_PATTERN = [4, 4]
 
 _LIGHT_COLORS = {
     LightState.GREEN: (0, 255, 0),
@@ -233,6 +235,158 @@ def _draw_lane_signals(
             pygame.draw.circle(surface, color, (adj_x, adj_y), TRAFFIC_LIGHT_RADIUS)
 
 
+def _draw_lane_direction_markings(
+    *,
+    surface: pygame.Surface,
+    geometry: IntersectionGeometry,
+    lane_counts_by_arm: Mapping[str, int],
+    lane_width: int,
+    world_window_width: int,
+    world_window_height: int,
+    inbound_lane_movements_by_arm: Mapping[str, Sequence[Sequence[str]]] | None,
+) -> None:
+    if inbound_lane_movements_by_arm is None:
+        return
+
+    forward_by_arm = {"N": (0.0, 1.0), "S": (0.0, -1.0), "E": (-1.0, 0.0), "W": (1.0, 0.0)}
+
+    for arm in geometry.arms:
+        lane_count = lane_counts_by_arm.get(arm.name, 1)
+        lane_movements = inbound_lane_movements_by_arm.get(arm.name)
+        if not lane_movements:
+            continue
+
+        stop_x, stop_y = arm.stop_line[0]
+        marker_offset = lane_width * 2.0
+        for lane_index in range(min(lane_count, len(lane_movements))):
+            lane_center_x, lane_center_y = lane_center_world_position(
+                arm=arm.name,
+                distance=0.0,
+                window_width=world_window_width,
+                window_height=world_window_height,
+                road_width=1,
+                lane_index=lane_index,
+                lane_count=lane_count,
+                lane_width=lane_width,
+                inbound_lane_offset=arm.inbound_lane_offset,
+            )
+            if arm.name == "N":
+                marker_center = (lane_center_x, stop_y - marker_offset)
+            elif arm.name == "S":
+                marker_center = (lane_center_x, stop_y + marker_offset)
+            elif arm.name == "E":
+                marker_center = (stop_x + marker_offset, lane_center_y)
+            else:
+                marker_center = (stop_x - marker_offset, lane_center_y)
+
+            fx, fy = forward_by_arm[arm.name]
+            left = (fy, -fx)
+            right = (-fy, fx)
+            marker_length = lane_width * 1.6
+            branch_length = lane_width * 0.9
+
+            def _draw_arrow(tip: tuple[float, float], direction: tuple[float, float]) -> None:
+                dx, dy = direction
+                perp = (-dy, dx)
+                a = (
+                    tip[0] - (dx * (lane_width * 0.5)) + (perp[0] * (lane_width * 0.35)),
+                    tip[1] - (dy * (lane_width * 0.5)) + (perp[1] * (lane_width * 0.35)),
+                )
+                b = (
+                    tip[0] - (dx * (lane_width * 0.5)) - (perp[0] * (lane_width * 0.35)),
+                    tip[1] - (dy * (lane_width * 0.5)) - (perp[1] * (lane_width * 0.35)),
+                )
+                pygame.draw.polygon(surface, _MARKING_COLOR, (tip, a, b))
+
+            p0 = (
+                marker_center[0] - (fx * marker_length * 0.5),
+                marker_center[1] - (fy * marker_length * 0.5),
+            )
+            p1 = (
+                marker_center[0] + (fx * marker_length * 0.5),
+                marker_center[1] + (fy * marker_length * 0.5),
+            )
+            movements = set(lane_movements[lane_index])
+            if "straight" in movements:
+                pygame.draw.line(surface, _MARKING_COLOR, p0, p1, width=2)
+                _draw_arrow(p1, (fx, fy))
+            if "left" in movements:
+                pivot = (
+                    marker_center[0] + (fx * marker_length * 0.1),
+                    marker_center[1] + (fy * marker_length * 0.1),
+                )
+                left_tip = (
+                    pivot[0] + (left[0] * branch_length),
+                    pivot[1] + (left[1] * branch_length),
+                )
+                pygame.draw.line(surface, _MARKING_COLOR, p0, pivot, width=2)
+                pygame.draw.line(surface, _MARKING_COLOR, pivot, left_tip, width=2)
+                _draw_arrow(left_tip, left)
+            if "right" in movements:
+                pivot = (
+                    marker_center[0] + (fx * marker_length * 0.1),
+                    marker_center[1] + (fy * marker_length * 0.1),
+                )
+                right_tip = (
+                    pivot[0] + (right[0] * branch_length),
+                    pivot[1] + (right[1] * branch_length),
+                )
+                pygame.draw.line(surface, _MARKING_COLOR, p0, pivot, width=2)
+                pygame.draw.line(surface, _MARKING_COLOR, pivot, right_tip, width=2)
+                _draw_arrow(right_tip, right)
+
+
+def _draw_lane_separation_markings(
+    *,
+    surface: pygame.Surface,
+    geometry: IntersectionGeometry,
+    lane_counts_by_arm: Mapping[str, int],
+    outbound_lane_count_by_arm: Mapping[str, int] | None,
+    lane_width: int,
+    world_window_width: int,
+    world_window_height: int,
+) -> None:
+    cx, cy = geometry.center
+    for arm in geometry.arms:
+        lane_count = lane_counts_by_arm.get(arm.name, 1)
+        outbound_count = (
+            lane_count
+            if outbound_lane_count_by_arm is None
+            else outbound_lane_count_by_arm.get(arm.name, lane_count)
+        )
+        for boundary_index in range(1, lane_count):
+            offset = arm.inbound_lane_offset + (lane_width * boundary_index)
+            if arm.name == "N":
+                x = cx - offset
+                start, end = (x, 0), (x, arm.stop_line[0][1])
+            elif arm.name == "S":
+                x = cx + offset
+                start, end = (x, arm.stop_line[0][1]), (x, world_window_height - 1)
+            elif arm.name == "E":
+                y = cy - offset
+                start, end = (arm.stop_line[0][0], y), (world_window_width - 1, y)
+            else:
+                y = cy + offset
+                start, end = (0, y), (arm.stop_line[0][0], y)
+            _draw_dashed_line(surface, _MARKING_COLOR, start, end, width=2, dash_pattern=_LANE_MARKING_DASH_PATTERN)
+
+        for boundary_index in range(1, outbound_count):
+            offset = arm.outbound_lane_offset + (lane_width * boundary_index)
+            if arm.name == "N":
+                x = cx + offset
+                start, end = (x, 0), (x, cy)
+            elif arm.name == "S":
+                x = cx - offset
+                start, end = (x, cy), (x, world_window_height - 1)
+            elif arm.name == "E":
+                y = cy + offset
+                start, end = (cx, y), (world_window_width - 1, y)
+            else:
+                y = cy - offset
+                start, end = (0, y), (cx, y)
+            _draw_dashed_line(surface, _MARKING_COLOR, start, end, width=2, dash_pattern=_LANE_MARKING_DASH_PATTERN)
+
+
 def render(
     surface: pygame.Surface,
     geometry: IntersectionGeometry,
@@ -245,6 +399,8 @@ def render(
     lane_width: int = VEHICLE_WIDTH,
     vehicle_length: int = VEHICLE_LENGTH,
     vehicle_width: int = VEHICLE_WIDTH,
+    outbound_lane_count_by_arm: Mapping[str, int] | None = None,
+    inbound_lane_movements_by_arm: Mapping[str, Sequence[Sequence[str]]] | None = None,
 ) -> None:
     """
     Render the intersection simulation to a pygame surface.
@@ -295,9 +451,27 @@ def render(
             center_x - world_window_width // 2 + end[0],
             center_y - world_window_height // 2 + end[1],
         )
-        _draw_dashed_line(
-            surface, _CENTER_LINE_COLOR, adjusted_start, adjusted_end, width=2, dash_pattern=_CENTER_LINE_DASH_PATTERN
-        )
+        pygame.draw.line(surface, _CENTER_LINE_COLOR, adjusted_start, adjusted_end, width=2)
+
+    _draw_lane_separation_markings(
+        surface=surface,
+        geometry=geometry,
+        lane_counts_by_arm=state.lane_counts_by_arm,
+        outbound_lane_count_by_arm=outbound_lane_count_by_arm,
+        lane_width=lane_width,
+        world_window_width=world_window_width,
+        world_window_height=world_window_height,
+    )
+
+    _draw_lane_direction_markings(
+        surface=surface,
+        geometry=geometry,
+        lane_counts_by_arm=state.lane_counts_by_arm,
+        lane_width=lane_width,
+        world_window_width=world_window_width,
+        world_window_height=world_window_height,
+        inbound_lane_movements_by_arm=inbound_lane_movements_by_arm,
+    )
 
     # Draw center mark
     adjusted_center = (center_x, center_y)
